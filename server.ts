@@ -69,18 +69,20 @@ const defaultData = {
 
 let supabaseClient: any = null;
 let isSupabaseActive = false;
+let lastSupabaseError: string | null = null;
 
 function getSupabase() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-  if (supabaseUrl && supabaseKey) {
+  if (supabaseUrl && supabaseKey && supabaseUrl.trim() !== "" && supabaseKey.trim() !== "") {
     if (!supabaseClient) {
       try {
         supabaseClient = createClient(supabaseUrl, supabaseKey);
         console.log("Supabase Client initialized with URL:", supabaseUrl);
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed to initialize Supabase client:", e);
+        lastSupabaseError = e?.message || String(e);
       }
     }
     return supabaseClient;
@@ -111,9 +113,11 @@ async function loadDB(): Promise<any> {
       if (error) {
         console.warn("Supabase load query warning (tables may not exist yet, defaulting to local JSON):", error.message);
         isSupabaseActive = false;
+        lastSupabaseError = error.message;
       } else if (data && data.data) {
         const parsed = data.data;
         isSupabaseActive = true;
+        lastSupabaseError = null;
 
         // Graceful schema assertions on loaded data
         if (!parsed.settings) parsed.settings = {};
@@ -130,6 +134,7 @@ async function loadDB(): Promise<any> {
         const seedValue = getLocalStoredData();
         await client.from("tournament_state").upsert({ id: "main", data: seedValue, updated_at: new Date().toISOString() });
         isSupabaseActive = true;
+        lastSupabaseError = null;
         cachedData = seedValue;
         lastCacheTime = now;
         return seedValue;
@@ -137,7 +142,10 @@ async function loadDB(): Promise<any> {
     } catch (err: any) {
       console.error("Error connected with Supabase Database fetch: ", err?.message || err);
       isSupabaseActive = false;
+      lastSupabaseError = err?.message || String(err);
     }
+  } else {
+    lastSupabaseError = "Supabase URL or Key is not configured / لم يتم إعداد رابط أو مفتاح Supabase";
   }
 
   // Local JSON loader fallback
@@ -219,14 +227,19 @@ async function saveDB(data: any) {
       if (error) {
         console.error("Supabase upsert query error:", error.message);
         isSupabaseActive = false;
+        lastSupabaseError = error.message;
       } else {
         isSupabaseActive = true;
+        lastSupabaseError = null;
         console.log("Tournament state successfully persisted to Supabase!");
       }
     } catch (err: any) {
       console.error("Error saving state to Supabase:", err);
       isSupabaseActive = false;
+      lastSupabaseError = err?.message || String(err);
     }
+  } else {
+    lastSupabaseError = "Supabase URL or Key is not configured / لم يتم إعداد رابط أو مفتاح Supabase";
   }
 }
 
@@ -263,7 +276,8 @@ async function startServer() {
         dev2NameEn: dbData.settings.dev2NameEn,
         dev2ImageUrl: dbData.settings.dev2ImageUrl,
         supabaseActive: isSupabaseActive,
-        supabaseConfigured: !!getSupabase()
+        supabaseConfigured: !!getSupabase(),
+        supabaseError: lastSupabaseError || undefined
       });
     } catch (err: any) {
       console.error("Error fetching tournament:", err);
@@ -589,6 +603,167 @@ async function startServer() {
     } catch (err: any) {
       console.error("Error changing passcode:", err);
       res.status(500).json({ error: "Failed to change passcode / فشل تغيير الرمز" });
+    }
+  });
+
+  // Helper utility to write configuration changes to the /.env file
+  function updateEnvFile(url: string, key: string) {
+    const envPath = path.join(process.cwd(), ".env");
+    let content = "";
+    if (fs.existsSync(envPath)) {
+      content = fs.readFileSync(envPath, "utf-8");
+    }
+
+    const lines = content.split("\n");
+    const newLines: string[] = [];
+    const keysToReplace = {
+      VITE_SUPABASE_URL: url,
+      VITE_SUPABASE_PUBLISHABLE_KEY: key,
+      SUPABASE_URL: url,
+      SUPABASE_KEY: key
+    };
+
+    const processed = new Set<string>();
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("#") || trimmed === "") {
+        newLines.push(line);
+        continue;
+      }
+
+      const parts = trimmed.split("=");
+      const k = parts[0].trim();
+      if (k in keysToReplace) {
+        newLines.push(`${k}=${keysToReplace[k as keyof typeof keysToReplace]}`);
+        processed.add(k);
+      } else {
+        newLines.push(line);
+      }
+    }
+
+    // Append any keys that weren't present in the original file
+    for (const k of Object.keys(keysToReplace)) {
+      if (!processed.has(k)) {
+        newLines.push(`${k}=${keysToReplace[k as keyof typeof keysToReplace]}`);
+      }
+    }
+
+    fs.writeFileSync(envPath, newLines.join("\n"), "utf-8");
+  }
+
+  // API: Save and Test Supabase Credentials
+  app.post("/api/admin/supabase-config", verifyAdmin, async (req, res) => {
+    try {
+      const { supabaseUrl, supabaseKey } = req.body;
+
+      if (!supabaseUrl || !supabaseKey || supabaseUrl.trim() === "" || supabaseKey.trim() === "") {
+        // Clear Supabase configuration
+        process.env.SUPABASE_URL = "";
+        process.env.SUPABASE_KEY = "";
+        process.env.VITE_SUPABASE_URL = "";
+        process.env.VITE_SUPABASE_PUBLISHABLE_KEY = "";
+        
+        updateEnvFile("", "");
+        supabaseClient = null;
+        isSupabaseActive = false;
+        lastSupabaseError = null;
+
+        return res.json({ 
+          success: true, 
+          message: "Supabase connection cleared / تم مسح بيانات الاتصال بـ Supabase",
+          supabaseActive: false 
+        });
+      }
+
+      // Test credentials
+      const trimmedUrl = supabaseUrl.trim();
+      const trimmedKey = supabaseKey.trim();
+
+      // Create a temporary client to avoid breaking real client during validation
+      const tempClient = createClient(trimmedUrl, trimmedKey);
+      
+      const { data, error } = await tempClient
+        .from("tournament_state")
+        .select("data")
+        .eq("id", "main")
+        .single();
+
+      let isSuccess = false;
+      let errorMsg = null;
+
+      if (error) {
+        // PGRST116 (no row found), or relation / table missing error codes indicate connection succeeds but schema lacks table.
+        if (error.code === "PGRST116" || error.message.includes("relation") || error.code === "42P01") {
+          isSuccess = true;
+          errorMsg = error.message; // Keep message to inform developer they need to run the SQL query
+        } else {
+          isSuccess = false;
+          errorMsg = error.message;
+        }
+      } else {
+        isSuccess = true;
+      }
+
+      if (isSuccess) {
+        // Valid configuration! Let's persist
+        process.env.SUPABASE_URL = trimmedUrl;
+        process.env.SUPABASE_KEY = trimmedKey;
+        process.env.VITE_SUPABASE_URL = trimmedUrl;
+        process.env.VITE_SUPABASE_PUBLISHABLE_KEY = trimmedKey;
+
+        updateEnvFile(trimmedUrl, trimmedKey);
+        
+        supabaseClient = tempClient;
+        isSupabaseActive = !error; 
+        lastSupabaseError = error ? error.message : null;
+
+        // Auto-seed if the table is functional but has no rows
+        if (!error && (!data || !data.data)) {
+          console.log("Seeding verified empty state row...");
+          const seedValue = getLocalStoredData();
+          await supabaseClient.from("tournament_state").upsert({ id: "main", data: seedValue, updated_at: new Date().toISOString() });
+          isSupabaseActive = true;
+          lastSupabaseError = null;
+        }
+
+        return res.json({
+          success: true,
+          message: "Supabase connected successfully / تم الاتصال بـ Supabase بنجاح",
+          supabaseActive: isSupabaseActive,
+          supabaseError: lastSupabaseError || undefined
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: errorMsg || "Invalid credentials / بيانات الاتصال غير صالحة"
+        });
+      }
+
+    } catch (err: any) {
+      console.error("Error verifying Supabase connection:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Internal server error during validation"
+      });
+    }
+  });
+
+  // API: Retry Supabase connection
+  app.post("/api/admin/supabase-retry", verifyAdmin, async (req, res) => {
+    try {
+      // Clear cache and rebuild
+      cachedData = null;
+      lastCacheTime = 0;
+      const dbData = await loadDB();
+      res.json({
+        success: true,
+        supabaseActive: isSupabaseActive,
+        supabaseError: lastSupabaseError || undefined,
+        data: dbData
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "Failed to retry connection / فشلت المحاولة" });
     }
   });
 

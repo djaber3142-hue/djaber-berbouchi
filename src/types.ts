@@ -24,6 +24,7 @@ export interface TournamentState {
   dev2ImageUrl?: string;
   supabaseActive?: boolean;
   supabaseConfigured?: boolean;
+  supabaseError?: string;
 }
 
 export type Language = "ar" | "en";

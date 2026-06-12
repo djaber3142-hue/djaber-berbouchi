@@ -26,6 +26,7 @@ interface AdminPanelProps {
   dev2ImageUrl?: string;
   supabaseActive?: boolean;
   supabaseConfigured?: boolean;
+  supabaseError?: string;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -49,11 +50,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   dev2ImageUrl = "",
   supabaseActive = false,
   supabaseConfigured = false,
+  supabaseError = "",
 }) => {
   const isRtl = lang === "ar";
   
   // State managers
   const [copiedSql, setCopiedSql] = useState(false);
+  
+  // Supabase Custom Config Editor States
+  const [showSupabaseForm, setShowSupabaseForm] = useState(false);
+  const [inputSupabaseUrl, setInputSupabaseUrl] = useState("");
+  const [inputSupabaseKey, setInputSupabaseKey] = useState("");
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+  const [supabaseTestErr, setSupabaseTestErr] = useState<string | null>(null);
+  const [supabaseTestOk, setSupabaseTestOk] = useState<string | null>(null);
+
   const [activeTab, setActiveTab] = useState<"players" | "settings">("players");
   const [playersList, setPlayersList] = useState<Player[]>(players);
   
@@ -508,6 +519,75 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  // 7) Save and Test Supabase Config
+  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsTestingSupabase(true);
+    setSupabaseTestErr(null);
+    setSupabaseTestOk(null);
+
+    try {
+      const res = await fetch("/api/admin/supabase-config", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-passcode": adminPasscode,
+        },
+        body: JSON.stringify({
+          supabaseUrl: inputSupabaseUrl.trim(),
+          supabaseKey: inputSupabaseKey.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to connect to Supabase");
+      }
+
+      setSupabaseTestOk(isRtl ? "تم الحفظ والاتصال بنجاح!" : "Saved and connected successfully!");
+      showStatus("success", isRtl ? "تم تحديث إعدادات Supabase بنجاح" : "Supabase connection updated successfully");
+      setShowSupabaseForm(false);
+      onRefreshTournamentState();
+    } catch (err: any) {
+      setSupabaseTestErr(err.message || "Error connecting to Supabase");
+      showStatus("error", err.message || "Error setting up Supabase");
+    } finally {
+      setIsTestingSupabase(false);
+    }
+  };
+
+  // 8) Static client retry action for connection resets/refreshes
+  const handleRetrySupabase = async () => {
+    setIsTestingSupabase(true);
+    setSupabaseTestErr(null);
+    setSupabaseTestOk(null);
+    try {
+      const res = await fetch("/api/admin/supabase-retry", {
+        method: "POST",
+        headers: {
+          "x-admin-passcode": adminPasscode,
+        },
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Retry connection failed");
+
+      if (data.supabaseActive) {
+        setSupabaseTestOk(isRtl ? "تم الاتصال بنجاح!" : "Successfully connected!");
+        showStatus("success", isRtl ? "متصل بسحابة Supabase" : "Connected to Supabase cloud");
+      } else {
+        throw new Error(data.supabaseError || (isRtl ? "لم ينجح الاتصال بالسحابة" : "Cloud connection failed"));
+      }
+      onRefreshTournamentState();
+    } catch (err: any) {
+      setSupabaseTestErr(err.message || "Retry failed");
+      showStatus("error", err.message || "Retry failed");
+    } finally {
+      setIsTestingSupabase(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
       <div 
@@ -741,20 +821,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               {/* Supabase Cloud Connection Status */}
               <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 text-slate-900">
                     <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${
                       supabaseActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
                     }`}></span>
                     <span>{t.supabaseStatusLabel}</span>
                   </h4>
-                  <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full ${
-                    supabaseActive 
-                      ? "bg-emerald-100 text-emerald-800" 
-                      : "bg-amber-100 text-amber-800"
-                  }`}>
-                    {supabaseActive ? (isRtl ? "نشط وسحابي" : "Active Cloud") : (isRtl ? "حفظ محلي احتياطي" : "Local Backup")}
-                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRetrySupabase}
+                      disabled={isTestingSupabase}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 disabled:text-slate-400 bg-blue-50 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                    >
+                      {isTestingSupabase ? (isRtl ? "جاري الاتصال..." : "Testing...") : (isRtl ? "إعادة محاولة الاتصال" : "Retry Connection")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSupabaseForm(!showSupabaseForm);
+                        setSupabaseTestErr(null);
+                        setSupabaseTestOk(null);
+                      }}
+                      className="text-[10px] font-bold text-slate-600 hover:text-slate-800 bg-slate-100 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                    >
+                      {showSupabaseForm ? (isRtl ? "إلغاء التعديل" : "Cancel") : (isRtl ? "تعديل إحداثيات الربط" : "Edit Connection Details")}
+                    </button>
+                  </div>
                 </div>
 
                 <div className={`p-4 rounded-xl border ${
@@ -762,12 +856,105 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ? "bg-emerald-50/30 border-emerald-100 text-slate-700" 
                     : "bg-amber-50/40 border-amber-200/55 text-slate-700"
                 }`}>
-                  <p className="text-xs font-semibold leading-relaxed">
-                    {supabaseActive ? t.supabaseConnected : t.supabaseOffline}
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold leading-relaxed">
+                      {supabaseActive ? t.supabaseConnected : t.supabaseOffline}
+                    </p>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      supabaseActive 
+                        ? "bg-emerald-100 text-emerald-800" 
+                        : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {supabaseActive ? (isRtl ? "نشط وسحابي" : "Active Cloud") : (isRtl ? "حفظ محلي احتياطي" : "Local Backup")}
+                    </span>
+                  </div>
+                  {supabaseError && (
+                    <div className="mt-2 pt-2 border-t border-amber-200/30 font-mono text-[10px] text-rose-600 font-bold max-h-24 overflow-y-auto">
+                      {isRtl ? "آخر خطأ مسجل: " : "Last recorded error: "} {supabaseError}
+                    </div>
+                  )}
                 </div>
 
-                {!supabaseActive && (
+                {/* Dynamic Supabase Settings Form */}
+                {showSupabaseForm && (
+                  <form onSubmit={handleSaveSupabaseConfig} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3.5 animate-fade-in">
+                    <h5 className="text-xs font-bold text-slate-700">{isRtl ? "تعديل بيانات الربط بـ Supabase" : "Set Supabase Credentials"}</h5>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Supabase URL</label>
+                        <input
+                          type="url"
+                          value={inputSupabaseUrl}
+                          onChange={(e) => setInputSupabaseUrl(e.target.value)}
+                          placeholder="https://your-project.supabase.co"
+                          className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          required
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Supabase Anon Key or Service Role Key</label>
+                        <input
+                          type="password"
+                          value={inputSupabaseKey}
+                          onChange={(e) => setInputSupabaseKey(e.target.value)}
+                          placeholder="eyJhbGciOi..."
+                          className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    {supabaseTestErr && (
+                      <div className="text-[10px] font-bold text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 max-h-24 overflow-y-auto font-mono">
+                        {supabaseTestErr}
+                      </div>
+                    )}
+                    {supabaseTestOk && (
+                      <div className="text-[10px] font-bold text-emerald-600 bg-emerald-50 p-2 rounded-lg border border-emerald-100 font-mono">
+                        {supabaseTestOk}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(isRtl ? "هل أنت متأكد من رغبتك في إلغاء تفعيل سحابة Supabase ومسح الإحداثيات؟" : "Are you sure you want to disable Supabase and clear configuration?")) {
+                            setInputSupabaseUrl("");
+                            setInputSupabaseKey("");
+                            // Trigger clear config on server
+                            fetch("/api/admin/supabase-config", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "x-admin-passcode": adminPasscode,
+                              },
+                              body: JSON.stringify({ supabaseUrl: "", supabaseKey: "" }),
+                            }).then(() => {
+                              onRefreshTournamentState();
+                              setShowSupabaseForm(false);
+                            });
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 text-rose-600 rounded-md hover:bg-rose-100 transition-colors cursor-pointer"
+                      >
+                        {isRtl ? "مسح وإلغاء التفعيل" : "Clear & Disable"}
+                      </button>
+                      
+                      <button
+                        type="submit"
+                        disabled={isTestingSupabase}
+                        className="px-3 py-1 text-[10px] font-bold bg-slate-900 text-white rounded-md hover:bg-slate-800 disabled:bg-slate-400 transition-colors cursor-pointer"
+                      >
+                        {isTestingSupabase ? (isRtl ? "جاري الاختبار والحفظ..." : "Testing & Saving...") : (isRtl ? "اختبار وحفظ والاتصال" : "Verify, Save & Sync")}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {!supabaseActive && !showSupabaseForm && (
                   <div className="space-y-3 pt-1">
                     <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
                       {t.supabaseInstructions}
@@ -781,6 +968,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 );`}
                       </pre>
                       <button
+                        type="button"
                         onClick={() => {
                           const sqlCode = `CREATE TABLE IF NOT EXISTS tournament_state (\n  id TEXT PRIMARY KEY,\n  data JSONB NOT NULL,\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL\n);`;
                           navigator.clipboard.writeText(sqlCode);
