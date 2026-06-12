@@ -1,0 +1,47 @@
+{
+  "players": [
+    {
+      "id": "player_1",
+      "nameAr": "يوسف البلايلي",
+      "nameEn": "Youcef Belaïli",
+      "imageUrl": "",
+      "votes": 140
+    },
+    {
+      "id": "player_2",
+      "nameAr": "رياض محرز",
+      "nameEn": "Riyad Mahrez",
+      "imageUrl": "",
+      "votes": 185
+    },
+    {
+      "id": "player_3",
+      "nameAr": "بغداد بونجاح",
+      "nameEn": "Baghdad Bounedjah",
+      "imageUrl": "",
+      "votes": 95
+    },
+    {
+      "id": "player_4",
+      "nameAr": "إسماعيل بن ناصر",
+      "nameEn": "Ismaël Bennacer",
+      "imageUrl": "",
+      "votes": 120
+    }
+  ],
+  "votes": [],
+  "settings": {
+    "isVotingPaused": false,
+    "adminPasscode": "1122",
+    "strictIpCheck": false,
+    "tournamentNameAr": "تصويت نجم البطولة",
+    "tournamentNameEn": "Tournament MVP Vote",
+    "tournamentLogoUrl": "",
+    "dev1NameAr": "المبرمج الأول",
+    "dev1NameEn": "Developer 1",
+    "dev1ImageUrl": "",
+    "dev2NameAr": "المبرمج الثاني",
+    "dev2NameEn": "Developer 2",
+    "dev2ImageUrl": ""
+  }
+}

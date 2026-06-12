@@ -52,7 +52,7 @@ const defaultData = {
   ],
   settings: {
     isVotingPaused: false,
-    adminPasscode: "1234", // Default pincode for simple admin login, changeable in panel
+    adminPasscode: "1122", // Default pincode for simple admin login, changeable in panel
     strictIpCheck: false,
     tournamentNameAr: "تصويت نجم البطولة",
     tournamentNameEn: "Tournament MVP Vote",
@@ -118,7 +118,7 @@ async function loadDB(): Promise<any> {
         if (!parsed.settings) parsed.settings = {};
         if (!parsed.players) parsed.players = [];
         if (!parsed.votes) parsed.votes = [];
-        if (!parsed.settings.adminPasscode) parsed.settings.adminPasscode = "1234";
+        if (!parsed.settings.adminPasscode) parsed.settings.adminPasscode = "1122";
 
         cachedData = parsed;
         lastCacheTime = now;
@@ -158,7 +158,7 @@ function getLocalStoredData(): any {
     // Graceful backward-compatible migration for existing data
     if (!parsed.settings) parsed.settings = {};
     if (!parsed.settings.adminPasscode) {
-      parsed.settings.adminPasscode = "1234";
+      parsed.settings.adminPasscode = "1122";
     }
     if (!parsed.settings.tournamentNameAr) {
       parsed.settings.tournamentNameAr = "تصويت نجم البطولة";
@@ -361,7 +361,7 @@ async function startServer() {
     try {
       const { passcode } = req.body;
       const dbData = await loadDB();
-      const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
+      const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1122";
 
       if (String(passcode) === String(activePasscode)) {
         return res.json({ success: true });
@@ -378,7 +378,7 @@ async function startServer() {
     try {
       const adminPasscodeHeader = req.headers["x-admin-passcode"];
       const dbData = await loadDB();
-      const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
+      const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1122";
 
       if (String(adminPasscodeHeader) === String(activePasscode)) {
         return next();
@@ -583,7 +583,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", async () => {
     const dbData = await loadDB();
-    const currentPasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
+    const currentPasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1122";
     console.log(`Tournament Voting Server listening on http://localhost:${PORT}`);
     console.log(`Admin passcode is currently: ${currentPasscode}`);
   });
