@@ -260,7 +260,10 @@ export default function App() {
               </div>
             ) : (
               <button
-                onClick={() => setShowAdminLogin(true)}
+                onClick={() => {
+                  setIsAdminAuthenticated(true);
+                  triggerNotification("success", isRtl ? "تم الدخول بصفتك مشرف بفضل ميزة الدخول المباشر" : "Logged in as Admin directly!");
+                }}
                 className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
                 title={t.adminBtn}
               >
