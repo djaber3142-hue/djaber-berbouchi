@@ -17,6 +17,7 @@ interface AdminPanelProps {
   tournamentNameEn?: string;
   tournamentLogoUrl?: string;
   strictIpCheck?: boolean;
+  requirePasscode?: boolean;
   dev1NameAr?: string;
   dev1NameEn?: string;
   dev1ImageUrl?: string;
@@ -39,6 +40,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   tournamentNameEn = "",
   tournamentLogoUrl = "",
   strictIpCheck = false,
+  requirePasscode = false,
   dev1NameAr = "",
   dev1NameEn = "",
   dev1ImageUrl = "",
@@ -70,6 +72,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // System Settings
   const [localVotingPaused, setLocalVotingPaused] = useState(isVotingPaused);
   const [localStrictIp, setLocalStrictIp] = useState(strictIpCheck);
+  const [localRequirePasscode, setLocalRequirePasscode] = useState(requirePasscode);
   const [newPasscode, setNewPasscode] = useState("");
   
   // Tournament Branding Settings
@@ -91,6 +94,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLocalTournamentNameEn(tournamentNameEn);
     setLocalTournamentLogoUrl(tournamentLogoUrl);
     setLocalStrictIp(strictIpCheck);
+    setLocalRequirePasscode(requirePasscode);
     setLocalVotingPaused(isVotingPaused);
     setLocalDev1NameAr(dev1NameAr);
     setLocalDev1NameEn(dev1NameEn);
@@ -103,6 +107,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     tournamentNameEn, 
     tournamentLogoUrl, 
     strictIpCheck, 
+    requirePasscode,
     isVotingPaused,
     dev1NameAr,
     dev1NameEn,
@@ -429,6 +434,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({
           isVotingPaused: localVotingPaused,
           strictIpCheck: localStrictIp,
+          requirePasscode: localRequirePasscode,
           tournamentNameAr: localTournamentNameAr.trim(),
           tournamentNameEn: localTournamentNameEn.trim(),
           tournamentLogoUrl: localTournamentLogoUrl,
@@ -1050,6 +1056,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     >
                       {localStrictIp ? (
                         <ToggleRight className="w-12 h-12 text-emerald-500" />
+                      ) : (
+                        <ToggleLeft className="w-12 h-12 text-slate-300" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Require Admin Passcode Toggle */}
+                  <div className="flex items-center justify-between gap-12 pt-4 border-t border-slate-200/50">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-md">
+                        {isRtl ? "المطالبة بكلمة مرور للمشرف" : "Require Admin Passcode"}
+                      </h4>
+                      <p className="text-slate-400 text-xs mt-0.5">
+                        {isRtl 
+                          ? "عند تفعيل هذا، سيُطلب من أي شخص يحاول دخول لوحة التحكم إدخال رمز المرور. عند تعطيله، سيتم الدخول مباشرة بدون كلمة مرور." 
+                          : "When enabled, any user clicking on the Admin Panel button is required to input the passcode. When disabled, access is instantly granted without any passcode."}
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setLocalRequirePasscode(!localRequirePasscode)}
+                      className="text-slate-600 hover:text-slate-800 focus:outline-none cursor-pointer"
+                    >
+                      {localRequirePasscode ? (
+                        <ToggleRight className="w-12 h-12 text-blue-500" />
                       ) : (
                         <ToggleLeft className="w-12 h-12 text-slate-300" />
                       )}

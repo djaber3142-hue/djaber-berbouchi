@@ -15,6 +15,7 @@ export interface TournamentState {
   tournamentNameEn?: string;
   tournamentLogoUrl?: string;
   strictIpCheck?: boolean;
+  requirePasscode?: boolean;
   dev1NameAr?: string;
   dev1NameEn?: string;
   dev1ImageUrl?: string;

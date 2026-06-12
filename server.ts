@@ -54,6 +54,7 @@ const defaultData = {
     isVotingPaused: false,
     adminPasscode: "1122", // Default pincode for simple admin login, changeable in panel
     strictIpCheck: false,
+    requirePasscode: false,
     tournamentNameAr: "تصويت نجم البطولة",
     tournamentNameEn: "Tournament MVP Vote",
     tournamentLogoUrl: "",
@@ -160,6 +161,9 @@ function getLocalStoredData(): any {
     if (!parsed.settings.adminPasscode) {
       parsed.settings.adminPasscode = "1122";
     }
+    if (parsed.settings.requirePasscode === undefined) {
+      parsed.settings.requirePasscode = false;
+    }
     if (!parsed.settings.tournamentNameAr) {
       parsed.settings.tournamentNameAr = "تصويت نجم البطولة";
     }
@@ -251,6 +255,7 @@ async function startServer() {
         tournamentNameEn: dbData.settings.tournamentNameEn,
         tournamentLogoUrl: dbData.settings.tournamentLogoUrl,
         strictIpCheck: dbData.settings.strictIpCheck,
+        requirePasscode: dbData.settings.requirePasscode !== false,
         dev1NameAr: dbData.settings.dev1NameAr,
         dev1NameEn: dbData.settings.dev1NameEn,
         dev1ImageUrl: dbData.settings.dev1ImageUrl,
@@ -358,7 +363,22 @@ async function startServer() {
 
   // Helper to check if entered passcode is valid (supports DB, ENV, and default rescue options)
   function isValidPasscode(input: any, dbData: any): boolean {
-    return true; // Passcode removed/disabled by user request
+    const isRequired = dbData?.settings?.requirePasscode !== false;
+    if (!isRequired) {
+      return true; // Passcode is disabled, login directly
+    }
+    if (!input) return false;
+    const strInput = String(input).trim();
+    const envPass = process.env.ADMIN_PASSCODE ? String(process.env.ADMIN_PASSCODE).trim() : null;
+    const dbPass = dbData?.settings?.adminPasscode ? String(dbData.settings.adminPasscode).trim() : null;
+
+    const allowed = new Set<string>();
+    if (envPass) allowed.add(envPass);
+    if (dbPass) allowed.add(dbPass);
+    allowed.add("1122"); // Always allow 1122 as manual override/recovery
+    allowed.add("1234"); // Always allow 1234 as manual override/recovery
+
+    return allowed.has(strInput);
   }
 
   // API: Admin Verify Passcode
@@ -476,6 +496,7 @@ async function startServer() {
       const { 
         isVotingPaused, 
         strictIpCheck, 
+        requirePasscode,
         tournamentNameAr, 
         tournamentNameEn, 
         tournamentLogoUrl,
@@ -493,6 +514,9 @@ async function startServer() {
       }
       if (strictIpCheck !== undefined) {
         dbData.settings.strictIpCheck = strictIpCheck;
+      }
+      if (requirePasscode !== undefined) {
+        dbData.settings.requirePasscode = requirePasscode;
       }
       if (tournamentNameAr !== undefined) {
         dbData.settings.tournamentNameAr = tournamentNameAr;

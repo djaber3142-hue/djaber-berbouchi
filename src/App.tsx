@@ -84,6 +84,7 @@ export default function App() {
         tournamentNameEn: data.tournamentNameEn,
         tournamentLogoUrl: data.tournamentLogoUrl,
         strictIpCheck: data.strictIpCheck,
+        requirePasscode: !!data.requirePasscode,
         dev1NameAr: data.dev1NameAr || "",
         dev1NameEn: data.dev1NameEn || "",
         dev1ImageUrl: data.dev1ImageUrl || "",
@@ -261,8 +262,12 @@ export default function App() {
             ) : (
               <button
                 onClick={() => {
-                  setIsAdminAuthenticated(true);
-                  triggerNotification("success", isRtl ? "تم الدخول بصفتك مشرف بفضل ميزة الدخول المباشر" : "Logged in as Admin directly!");
+                  if (tournamentState.requirePasscode) {
+                    setShowAdminLogin(true);
+                  } else {
+                    setIsAdminAuthenticated(true);
+                    triggerNotification("success", isRtl ? "تم الدخول بصفتك مشرف بفضل ميزة الدخول المباشر" : "Logged in as Admin directly!");
+                  }
                 }}
                 className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
                 title={t.adminBtn}
@@ -561,6 +566,7 @@ export default function App() {
           tournamentNameEn={tournamentState.tournamentNameEn}
           tournamentLogoUrl={tournamentState.tournamentLogoUrl}
           strictIpCheck={tournamentState.strictIpCheck}
+          requirePasscode={tournamentState.requirePasscode}
           dev1NameAr={tournamentState.dev1NameAr}
           dev1NameEn={tournamentState.dev1NameEn}
           dev1ImageUrl={tournamentState.dev1ImageUrl}
