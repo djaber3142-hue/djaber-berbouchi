@@ -55,7 +55,11 @@ export const translations = {
     devNameArLabel: "الاسم (بالعربية)",
     devNameEnLabel: "الاسم (بالإنجليزية)",
     devPhotoLabel: "صورة في إطار دائري (اسحب أو اضغط للرفع)",
-    footerDevelopersTitle: "مبرمجو وصنّاع الموقع"
+    footerDevelopersTitle: "مبرمجو وصنّاع الموقع",
+    supabaseStatusLabel: "حالة مزامنة قاعدة البيانات السحابية (Supabase)",
+    supabaseConnected: "🟢 متصل بقاعدة بيانات Supabase السحابية (آمن ومستقر)",
+    supabaseOffline: "🟡 تشغيل محلي احتياطي (لم يتم ربط Supabase أو جدول tournament_state غير موجود)",
+    supabaseInstructions: "لتفعيل قاعدة البيانات السحابية (Supabase) لمنع فقدان البيانات بعد رفع المشروع، قم بإنشاء جدول بالاسم التالي في لوحة تحكم Supabase SQL Editor:"
   },
   en: {
     appTitle: "Tournament MVP Vote",
@@ -113,6 +117,10 @@ export const translations = {
     devNameArLabel: "Name (Arabic)",
     devNameEnLabel: "Name (English)",
     devPhotoLabel: "Developer Photo (Drag or Click to Upload)",
-    footerDevelopersTitle: "Site Developers & Creators"
+    footerDevelopersTitle: "Site Developers & Creators",
+    supabaseStatusLabel: "Cloud Database Sync Status (Supabase)",
+    supabaseConnected: "🟢 Connected to Supabase Cloud Database (Secure & Stable)",
+    supabaseOffline: "🟡 Local Fallback Mode (Supabase not configured or tournament_state table missing)",
+    supabaseInstructions: "To enable Supabase cloud database and prevent data loss after deployment, create the following table inside your Supabase dashboard SQL Editor:"
   }
 };

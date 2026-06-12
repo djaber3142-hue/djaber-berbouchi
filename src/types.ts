@@ -21,6 +21,8 @@ export interface TournamentState {
   dev2NameAr?: string;
   dev2NameEn?: string;
   dev2ImageUrl?: string;
+  supabaseActive?: boolean;
+  supabaseConfigured?: boolean;
 }
 
 export type Language = "ar" | "en";

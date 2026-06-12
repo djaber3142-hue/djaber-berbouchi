@@ -2,6 +2,10 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const PORT = 3000;
 const DB_PATH = path.join(process.cwd(), "data", "tournament.json");
@@ -62,8 +66,87 @@ const defaultData = {
   }
 };
 
-// Seed database if it doesn't exist
-function loadDB() {
+let supabaseClient: any = null;
+let isSupabaseActive = false;
+
+function getSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    if (!supabaseClient) {
+      try {
+        supabaseClient = createClient(supabaseUrl, supabaseKey);
+        console.log("Supabase Client initialized with URL:", supabaseUrl);
+      } catch (e) {
+        console.error("Failed to initialize Supabase client:", e);
+      }
+    }
+    return supabaseClient;
+  }
+  return null;
+}
+
+// In-memory cache to guarantee ultra-responsive rendering under concurrent requests
+let cachedData: any = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 3000; // 3 seconds TTL
+
+async function loadDB(): Promise<any> {
+  const now = Date.now();
+  if (cachedData && (now - lastCacheTime < CACHE_TTL)) {
+    return cachedData;
+  }
+
+  const client = getSupabase();
+  if (client) {
+    try {
+      const { data, error } = await client
+        .from("tournament_state")
+        .select("data")
+        .eq("id", "main")
+        .single();
+
+      if (error) {
+        console.warn("Supabase load query warning (tables may not exist yet, defaulting to local JSON):", error.message);
+        isSupabaseActive = false;
+      } else if (data && data.data) {
+        const parsed = data.data;
+        isSupabaseActive = true;
+
+        // Graceful schema assertions on loaded data
+        if (!parsed.settings) parsed.settings = {};
+        if (!parsed.players) parsed.players = [];
+        if (!parsed.votes) parsed.votes = [];
+        if (!parsed.settings.adminPasscode) parsed.settings.adminPasscode = "1234";
+
+        cachedData = parsed;
+        lastCacheTime = now;
+        return parsed;
+      } else {
+        // If row is empty, seed it with the current local state or default data
+        console.log("Supabase loaded successfully but empty main row. Seeding...");
+        const seedValue = getLocalStoredData();
+        await client.from("tournament_state").upsert({ id: "main", data: seedValue, updated_at: new Date().toISOString() });
+        isSupabaseActive = true;
+        cachedData = seedValue;
+        lastCacheTime = now;
+        return seedValue;
+      }
+    } catch (err: any) {
+      console.error("Error connected with Supabase Database fetch: ", err?.message || err);
+      isSupabaseActive = false;
+    }
+  }
+
+  // Local JSON loader fallback
+  const localData = getLocalStoredData();
+  cachedData = localData;
+  lastCacheTime = now;
+  return localData;
+}
+
+function getLocalStoredData(): any {
   if (!fs.existsSync(DB_PATH)) {
     fs.writeFileSync(DB_PATH, JSON.stringify(defaultData, null, 2), "utf-8");
     return defaultData;
@@ -74,6 +157,9 @@ function loadDB() {
     
     // Graceful backward-compatible migration for existing data
     if (!parsed.settings) parsed.settings = {};
+    if (!parsed.settings.adminPasscode) {
+      parsed.settings.adminPasscode = "1234";
+    }
     if (!parsed.settings.tournamentNameAr) {
       parsed.settings.tournamentNameAr = "تصويت نجم البطولة";
     }
@@ -108,8 +194,36 @@ function loadDB() {
   }
 }
 
-function saveDB(data: any) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+async function saveDB(data: any) {
+  cachedData = data;
+  lastCacheTime = Date.now();
+
+  // Always write offline file as redundant fail-safe
+  try {
+    fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+  } catch (e) {
+    console.error("Failed to write offline local JSON backup:", e);
+  }
+
+  const client = getSupabase();
+  if (client) {
+    try {
+      const { error } = await client
+        .from("tournament_state")
+        .upsert({ id: "main", data: data, updated_at: new Date().toISOString() });
+
+      if (error) {
+        console.error("Supabase upsert query error:", error.message);
+        isSupabaseActive = false;
+      } else {
+        isSupabaseActive = true;
+        console.log("Tournament state successfully persisted to Supabase!");
+      }
+    } catch (err: any) {
+      console.error("Error saving state to Supabase:", err);
+      isSupabaseActive = false;
+    }
+  }
 }
 
 async function startServer() {
@@ -119,8 +233,8 @@ async function startServer() {
   app.use(express.json({ limit: "15mb" }));
 
   // API: Get Tournament State
-  app.get("/api/tournament", (req, res) => {
-    const dbData = loadDB();
+  app.get("/api/tournament", async (req, res) => {
+    const dbData = await loadDB();
     // Map players to calculate percentage and total votes
     const totalVotes = dbData.players.reduce((sum: number, p: any) => sum + (p.votes || 0), 0);
     const playersWithPercentage = dbData.players.map((p: any) => ({
@@ -141,14 +255,16 @@ async function startServer() {
       dev1ImageUrl: dbData.settings.dev1ImageUrl,
       dev2NameAr: dbData.settings.dev2NameAr,
       dev2NameEn: dbData.settings.dev2NameEn,
-      dev2ImageUrl: dbData.settings.dev2ImageUrl
+      dev2ImageUrl: dbData.settings.dev2ImageUrl,
+      supabaseActive: isSupabaseActive,
+      supabaseConfigured: !!getSupabase()
     });
   });
 
   // API: Check if specific Voter UUID has already voted
-  app.get("/api/voter-status/:uuid", (req, res) => {
+  app.get("/api/voter-status/:uuid", async (req, res) => {
     const voterUuid = req.params.uuid;
-    const dbData = loadDB();
+    const dbData = await loadDB();
     
     // Check local server vote records
     const existingVote = dbData.votes.find((v: any) => v.voterUuid === voterUuid);
@@ -172,14 +288,14 @@ async function startServer() {
   });
 
   // API: Vote for a Player
-  app.post("/api/vote", (req, res) => {
+  app.post("/api/vote", async (req, res) => {
     const { playerId, voterUuid } = req.body;
     
     if (!playerId || !voterUuid) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    const dbData = loadDB();
+    const dbData = await loadDB();
 
     // Check if voting is paused
     if (dbData.settings.isVotingPaused) {
@@ -220,40 +336,43 @@ async function startServer() {
     // Increment player votes
     dbData.players[playerIndex].votes = (dbData.players[playerIndex].votes || 0) + 1;
 
-    saveDB(dbData);
+    await saveDB(dbData);
 
     res.json({ success: true, message: "Vote cast successfully!" });
   });
 
   // API: Admin Verify Passcode
-  app.post("/api/admin/login", (req, res) => {
+  app.post("/api/admin/login", async (req, res) => {
     const { passcode } = req.body;
-    const dbData = loadDB();
+    const dbData = await loadDB();
+    const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
 
-    if (passcode === dbData.settings.adminPasscode) {
+    if (String(passcode) === String(activePasscode)) {
       return res.json({ success: true });
     }
     return res.status(401).json({ error: "Incorrect passcode / رمز المرور غير صحيح" });
   });
 
   // Helper middleware for custom authentication in API
-  const verifyAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const verifyAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const adminPasscodeHeader = req.headers["x-admin-passcode"];
-    const dbData = loadDB();
-    if (adminPasscodeHeader === dbData.settings.adminPasscode) {
+    const dbData = await loadDB();
+    const activePasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
+
+    if (String(adminPasscodeHeader) === String(activePasscode)) {
       return next();
     }
     return res.status(401).json({ error: "Unauthorized access" });
   };
 
   // API: Admin Add Player
-  app.post("/api/admin/players", verifyAdmin, (req, res) => {
+  app.post("/api/admin/players", verifyAdmin, async (req, res) => {
     const { nameAr, nameEn, imageUrl } = req.body;
     if (!nameAr || !nameEn) {
       return res.status(400).json({ error: "Names in Arabic and English are required" });
     }
 
-    const dbData = loadDB();
+    const dbData = await loadDB();
     const newPlayer = {
       id: "player_" + Date.now(),
       nameAr,
@@ -263,17 +382,17 @@ async function startServer() {
     };
 
     dbData.players.push(newPlayer);
-    saveDB(dbData);
+    await saveDB(dbData);
 
     res.status(201).json({ success: true, player: newPlayer });
   });
 
   // API: Admin Edit Player
-  app.put("/api/admin/players/:id", verifyAdmin, (req, res) => {
+  app.put("/api/admin/players/:id", verifyAdmin, async (req, res) => {
     const playerId = req.params.id;
     const { nameAr, nameEn, imageUrl } = req.body;
 
-    const dbData = loadDB();
+    const dbData = await loadDB();
     const playerIndex = dbData.players.findIndex((p: any) => p.id === playerId);
 
     if (playerIndex === -1) {
@@ -286,14 +405,14 @@ async function startServer() {
       dbData.players[playerIndex].imageUrl = imageUrl;
     }
 
-    saveDB(dbData);
+    await saveDB(dbData);
     res.json({ success: true, player: dbData.players[playerIndex] });
   });
 
   // API: Admin Delete Player
-  app.delete("/api/admin/players/:id", verifyAdmin, (req, res) => {
+  app.delete("/api/admin/players/:id", verifyAdmin, async (req, res) => {
     const playerId = req.params.id;
-    const dbData = loadDB();
+    const dbData = await loadDB();
     
     const filterPlayers = dbData.players.filter((p: any) => p.id !== playerId);
     if (filterPlayers.length === dbData.players.length) {
@@ -304,12 +423,12 @@ async function startServer() {
     dbData.votes = dbData.votes.filter((v: any) => v.playerId !== playerId);
     dbData.players = filterPlayers;
     
-    saveDB(dbData);
+    await saveDB(dbData);
     res.json({ success: true });
   });
 
   // API: Admin Save General Settings (Pause/Resume/Strict Verification Toggle)
-  app.post("/api/admin/settings", verifyAdmin, (req, res) => {
+  app.post("/api/admin/settings", verifyAdmin, async (req, res) => {
     const { 
       isVotingPaused, 
       strictIpCheck, 
@@ -323,7 +442,7 @@ async function startServer() {
       dev2NameEn,
       dev2ImageUrl
     } = req.body;
-    const dbData = loadDB();
+    const dbData = await loadDB();
 
     if (isVotingPaused !== undefined) {
       dbData.settings.isVotingPaused = isVotingPaused;
@@ -359,13 +478,13 @@ async function startServer() {
       dbData.settings.dev2ImageUrl = dev2ImageUrl;
     }
 
-    saveDB(dbData);
+    await saveDB(dbData);
     res.json({ success: true, settings: dbData.settings });
   });
 
   // API: Admin Reset Votes (Keep players, clear all votes to 0)
-  app.post("/api/admin/reset", verifyAdmin, (req, res) => {
-    const dbData = loadDB();
+  app.post("/api/admin/reset", verifyAdmin, async (req, res) => {
+    const dbData = await loadDB();
     
     dbData.votes = [];
     dbData.players = dbData.players.map((p: any) => ({
@@ -373,20 +492,20 @@ async function startServer() {
       votes: 0
     }));
 
-    saveDB(dbData);
+    await saveDB(dbData);
     res.json({ success: true, message: "Tournament votes have been reset" });
   });
 
   // API: Admin Change Passcode
-  app.post("/api/admin/change-passcode", verifyAdmin, (req, res) => {
+  app.post("/api/admin/change-passcode", verifyAdmin, async (req, res) => {
     const { newPasscode } = req.body;
     if (!newPasscode || newPasscode.trim().length === 0) {
       return res.status(400).json({ error: "New passcode cannot be empty" });
     }
 
-    const dbData = loadDB();
+    const dbData = await loadDB();
     dbData.settings.adminPasscode = String(newPasscode).trim();
-    saveDB(dbData);
+    await saveDB(dbData);
 
     res.json({ success: true, message: "Passcode updated successfully" });
   });
@@ -407,8 +526,11 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  app.listen(PORT, "0.0.0.0", async () => {
+    const dbData = await loadDB();
+    const currentPasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1234";
     console.log(`Tournament Voting Server listening on http://localhost:${PORT}`);
+    console.log(`Admin passcode is currently: ${currentPasscode}`);
   });
 }
 

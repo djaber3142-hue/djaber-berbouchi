@@ -23,6 +23,8 @@ interface AdminPanelProps {
   dev2NameAr?: string;
   dev2NameEn?: string;
   dev2ImageUrl?: string;
+  supabaseActive?: boolean;
+  supabaseConfigured?: boolean;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -43,10 +45,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   dev2NameAr = "",
   dev2NameEn = "",
   dev2ImageUrl = "",
+  supabaseActive = false,
+  supabaseConfigured = false,
 }) => {
   const isRtl = lang === "ar";
   
   // State managers
+  const [copiedSql, setCopiedSql] = useState(false);
   const [activeTab, setActiveTab] = useState<"players" | "settings">("players");
   const [playersList, setPlayersList] = useState<Player[]>(players);
   
@@ -727,6 +732,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ) : (
             // Tab 2: Settings and Operations
             <div className="space-y-8 max-w-2xl mx-auto">
+
+              {/* Supabase Cloud Connection Status */}
+              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 text-slate-900">
+                    <span className={`flex-shrink-0 w-2.5 h-2.5 rounded-full ${
+                      supabaseActive ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                    }`}></span>
+                    <span>{t.supabaseStatusLabel}</span>
+                  </h4>
+                  <span className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-1 rounded-full ${
+                    supabaseActive 
+                      ? "bg-emerald-100 text-emerald-800" 
+                      : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {supabaseActive ? (isRtl ? "نشط وسحابي" : "Active Cloud") : (isRtl ? "حفظ محلي احتياطي" : "Local Backup")}
+                  </span>
+                </div>
+
+                <div className={`p-4 rounded-xl border ${
+                  supabaseActive 
+                    ? "bg-emerald-50/30 border-emerald-100 text-slate-700" 
+                    : "bg-amber-50/40 border-amber-200/55 text-slate-700"
+                }`}>
+                  <p className="text-xs font-semibold leading-relaxed">
+                    {supabaseActive ? t.supabaseConnected : t.supabaseOffline}
+                  </p>
+                </div>
+
+                {!supabaseActive && (
+                  <div className="space-y-3 pt-1">
+                    <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
+                      {t.supabaseInstructions}
+                    </p>
+                    <div className="relative">
+                      <pre className="bg-slate-950 text-slate-300 font-mono text-[10px] p-4 rounded-xl overflow-x-auto whitespace-pre leading-normal border border-slate-800">
+{`CREATE TABLE IF NOT EXISTS tournament_state (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);`}
+                      </pre>
+                      <button
+                        onClick={() => {
+                          const sqlCode = `CREATE TABLE IF NOT EXISTS tournament_state (\n  id TEXT PRIMARY KEY,\n  data JSONB NOT NULL,\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL\n);`;
+                          navigator.clipboard.writeText(sqlCode);
+                          setCopiedSql(true);
+                          setTimeout(() => setCopiedSql(false), 3000);
+                        }}
+                        className="absolute top-2.5 right-2 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-medium rounded-md transition-colors cursor-pointer"
+                      >
+                        {copiedSql ? (isRtl ? "تم النسخ!" : "Copied!") : (isRtl ? "نسخ الاستعلام" : "Copy Query")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               
               {/* General voting rule settings */}
               <div>

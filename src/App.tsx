@@ -90,6 +90,8 @@ export default function App() {
         dev2NameAr: data.dev2NameAr || "",
         dev2NameEn: data.dev2NameEn || "",
         dev2ImageUrl: data.dev2ImageUrl || "",
+        supabaseActive: !!data.supabaseActive,
+        supabaseConfigured: !!data.supabaseConfigured,
       });
     } catch (e) {
       console.error("Error loading tournament stats", e);
@@ -562,6 +564,8 @@ export default function App() {
           dev2NameAr={tournamentState.dev2NameAr}
           dev2NameEn={tournamentState.dev2NameEn}
           dev2ImageUrl={tournamentState.dev2ImageUrl}
+          supabaseActive={tournamentState.supabaseActive}
+          supabaseConfigured={tournamentState.supabaseConfigured}
         />
       )}
 
