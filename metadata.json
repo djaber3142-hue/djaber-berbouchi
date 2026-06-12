@@ -1,0 +1,6 @@
+{
+  "name": "Tournament Player Voting | تصويت لاعبي البطولة",
+  "description": "منصة لتصويت لاعبي البطولة المحلية باللغتين العربية والانجليزية مع لوحة تحكم المشرف لإدارة اللاعبين وإيقاف/إعادة تعيين التصوت. | A local league player voting platform in Arabic and English with an admin dashboard for managing players, pausing, and resetting votes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
