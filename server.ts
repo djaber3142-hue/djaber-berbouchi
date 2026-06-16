@@ -378,6 +378,15 @@ async function saveDB(data: any) {
 async function startServer() {
   // Use the globally exported app instance
 
+  // Vercel path-correction middleware
+  app.use((req, res, next) => {
+    // If Vercel rewrote the URL to /api/index.ts or similar, restore the original URL so Express routes can match
+    if (req.url.includes("index.ts") || req.url.includes("index.js") || req.url.startsWith("/api/index")) {
+      req.url = req.originalUrl || req.url;
+    }
+    next();
+  });
+
   // Allow larger payloads for Base64 image transfers
   app.use(express.json({ limit: "15mb" }));
 
@@ -972,12 +981,14 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    // Serve index.html for index and client routes
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (!process.env.VERCEL) {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      // Serve index.html for index and client routes
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
   }
 
   if (!process.env.VERCEL) {
