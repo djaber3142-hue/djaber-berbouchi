@@ -302,7 +302,7 @@ export default function App() {
             className="relative z-10 bg-emerald-500/10 text-emerald-400 font-extrabold text-xs px-4 py-1.5 rounded-full uppercase tracking-widest border border-emerald-500/30 flex items-center gap-1.5 mb-5"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            <span>{isRtl ? "نجم الأسبوع" : "PLAYER OF THE MATCH"}</span>
+            <span>{isRtl ? "نجم البطولة" : "TOURNAMENT MVP"}</span>
           </motion.div>
 
           {/* Tournament logo custom brand element */}
