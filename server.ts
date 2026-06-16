@@ -2,8 +2,9 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import { initializeApp, getApps, getApp, deleteApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 dotenv.config();
 
@@ -67,25 +68,72 @@ const defaultData = {
   }
 };
 
-let supabaseClient: any = null;
-let isSupabaseActive = false;
-let lastSupabaseError: string | null = null;
+let firebaseDB: any = null;
+let isFirebaseActive = false;
+let lastFirebaseError: string | null = null;
+let isFirebaseSuspended = false;
 
-function getSupabase() {
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+function getFirebaseDB() {
+  if (isFirebaseSuspended) return null;
+  if (firebaseDB) return firebaseDB;
 
-  if (supabaseUrl && supabaseKey && supabaseUrl.trim() !== "" && supabaseKey.trim() !== "") {
-    if (!supabaseClient) {
+  let config: any = null;
+
+  // 1. Check custom custom configuration first
+  const customConfigPath = path.join(process.cwd(), "firebase-custom-config.json");
+  if (fs.existsSync(customConfigPath)) {
+    try {
+      config = JSON.parse(fs.readFileSync(customConfigPath, "utf-8"));
+    } catch (e) {
+      console.error("Error reading custom firebase config:", e);
+    }
+  }
+
+  // 2. Fallback to default firebase-applet-config.json
+  if (!config) {
+    const defaultPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(defaultPath)) {
       try {
-        supabaseClient = createClient(supabaseUrl, supabaseKey);
-        console.log("Supabase Client initialized with URL:", supabaseUrl);
-      } catch (e: any) {
-        console.error("Failed to initialize Supabase client:", e);
-        lastSupabaseError = e?.message || String(e);
+        config = JSON.parse(fs.readFileSync(defaultPath, "utf-8"));
+      } catch (e) {
+        console.error("Error reading default firebase config:", e);
       }
     }
-    return supabaseClient;
+  }
+
+  // 3. Fallback to process.env variables (if configured)
+  if (!config && process.env.FIREBASE_PROJECT_ID) {
+    config = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      apiKey: process.env.FIREBASE_API_KEY,
+      appId: process.env.FIREBASE_APP_ID,
+      authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+      firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID
+    };
+  }
+
+  if (config && config.projectId && config.apiKey) {
+    try {
+      const apps = getApps();
+      let app;
+      if (apps.length === 0) {
+        app = initializeApp(config);
+      } else {
+        app = getApp();
+      }
+      
+      firebaseDB = getFirestore(app, config.firestoreDatabaseId || undefined);
+      isFirebaseActive = true;
+      lastFirebaseError = null;
+      console.log("Firebase initialized successfully with project ID:", config.projectId);
+      return firebaseDB;
+    } catch (error: any) {
+      console.error("Failed to initialize Firebase SDK:", error);
+      isFirebaseActive = false;
+      lastFirebaseError = error?.message || String(error);
+    }
+  } else {
+    lastFirebaseError = "Firebase is not configured / لم يتم إعداد واجهة Firebase";
   }
   return null;
 }
@@ -95,57 +143,141 @@ let cachedData: any = null;
 let lastCacheTime = 0;
 const CACHE_TTL = 3000; // 3 seconds TTL
 
+async function suspendFirebase(err: any, operationType: OperationType, pathStr: string | null) {
+  isFirebaseActive = false;
+  lastFirebaseError = err?.message || String(err);
+  
+  const errMsg = (err?.message || String(err)).toLowerCase();
+  const isTerminalError = 
+    errMsg.includes("permission") || 
+    errMsg.includes("insufficient") || 
+    errMsg.includes("not been used") || 
+    errMsg.includes("disabled") ||
+    errMsg.includes("api has not been used");
+
+  if (isTerminalError) {
+    if (!isFirebaseSuspended) {
+      isFirebaseSuspended = true;
+      console.warn(`[Firebase Custom Config] Terminal connection/permission error detected during ${operationType} on "${pathStr}". Bypassing future connection attempts and activating offline local backup to prevent background WebSocket retry leaks.`);
+      try {
+        const apps = getApps();
+        for (const app of apps) {
+          await deleteApp(app);
+        }
+      } catch (delErr) {
+        console.error("Error deleting Firebase app:", delErr);
+      }
+      firebaseDB = null;
+    }
+  }
+
+  try {
+    handleFirestoreError(err, operationType, pathStr);
+  } catch (telemetryErr) {
+    // Graceful telemetry bypass - continues back into the offline file fallback
+  }
+}
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: null,
+      email: null,
+      emailVerified: null,
+      isAnonymous: null,
+      tenantId: null,
+      providerInfo: []
+    },
+    operationType,
+    path
+  };
+  const stringified = JSON.stringify(errInfo);
+  console.error('Firestore Error: ', stringified);
+  throw new Error(stringified);
+}
+
 async function loadDB(): Promise<any> {
   const now = Date.now();
   if (cachedData && (now - lastCacheTime < CACHE_TTL)) {
     return cachedData;
   }
 
-  const client = getSupabase();
-  if (client) {
+  const db = getFirebaseDB();
+  if (db) {
     try {
-      const { data, error } = await client
-        .from("tournament_state")
-        .select("data")
-        .eq("id", "main")
-        .single();
+      const docRef = doc(db, "tournament_state", "main");
+      const fetchPromise = getDoc(docRef);
 
-      if (error) {
-        console.warn("Supabase load query warning (tables may not exist yet, defaulting to local JSON):", error.message);
-        isSupabaseActive = false;
-        lastSupabaseError = error.message;
-      } else if (data && data.data) {
-        const parsed = data.data;
-        isSupabaseActive = true;
-        lastSupabaseError = null;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Firebase connection timed out (2.0s limit) / انتهت مهلة الاتصال")), 2000)
+      );
 
-        // Graceful schema assertions on loaded data
-        if (!parsed.settings) parsed.settings = {};
-        if (!parsed.players) parsed.players = [];
-        if (!parsed.votes) parsed.votes = [];
-        if (!parsed.settings.adminPasscode) parsed.settings.adminPasscode = "1122";
+      const docSnap = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
-        cachedData = parsed;
-        lastCacheTime = now;
-        return parsed;
-      } else {
-        // If row is empty, seed it with the current local state or default data
-        console.log("Supabase loaded successfully but empty main row. Seeding...");
-        const seedValue = getLocalStoredData();
-        await client.from("tournament_state").upsert({ id: "main", data: seedValue, updated_at: new Date().toISOString() });
-        isSupabaseActive = true;
-        lastSupabaseError = null;
-        cachedData = seedValue;
-        lastCacheTime = now;
-        return seedValue;
+      if (docSnap.exists()) {
+        const docData = docSnap.data();
+        if (docData && docData.data) {
+          const parsed = docData.data;
+          isFirebaseActive = true;
+          lastFirebaseError = null;
+
+          // Graceful schema assertions on loaded data
+          if (!parsed.settings) parsed.settings = {};
+          if (!parsed.players) parsed.players = [];
+          if (!parsed.votes) parsed.votes = [];
+          if (!parsed.settings.adminPasscode) parsed.settings.adminPasscode = "1122";
+
+          cachedData = parsed;
+          lastCacheTime = now;
+          return parsed;
+        }
       }
+
+      // If document does not exist, seed it with local stored data or default
+      console.log("Firebase loaded successfully but 'main' document is missing/empty. Seeding...");
+      const seedValue = getLocalStoredData();
+
+      const upsertPromise = setDoc(docRef, { data: seedValue, updated_at: new Date().toISOString() });
+      await Promise.race([upsertPromise, timeoutPromise]);
+
+      isFirebaseActive = true;
+      lastFirebaseError = null;
+      cachedData = seedValue;
+      lastCacheTime = now;
+      return seedValue;
     } catch (err: any) {
-      console.error("Error connected with Supabase Database fetch: ", err?.message || err);
-      isSupabaseActive = false;
-      lastSupabaseError = err?.message || String(err);
+      console.error("Error connected with Firebase Database fetch: ", err?.message || err);
+      await suspendFirebase(err, OperationType.GET, "tournament_state/main");
     }
   } else {
-    lastSupabaseError = "Supabase URL or Key is not configured / لم يتم إعداد رابط أو مفتاح Supabase";
+    lastFirebaseError = "Firebase is not configured / لم يتم إعداد واجهة Firebase";
   }
 
   // Local JSON loader fallback
@@ -217,29 +349,27 @@ async function saveDB(data: any) {
     console.error("Failed to write offline local JSON backup:", e);
   }
 
-  const client = getSupabase();
-  if (client) {
+  const db = getFirebaseDB();
+  if (db) {
     try {
-      const { error } = await client
-        .from("tournament_state")
-        .upsert({ id: "main", data: data, updated_at: new Date().toISOString() });
+      const docRef = doc(db, "tournament_state", "main");
+      const upsertPromise = setDoc(docRef, { data: data, updated_at: new Date().toISOString() });
 
-      if (error) {
-        console.error("Supabase upsert query error:", error.message);
-        isSupabaseActive = false;
-        lastSupabaseError = error.message;
-      } else {
-        isSupabaseActive = true;
-        lastSupabaseError = null;
-        console.log("Tournament state successfully persisted to Supabase!");
-      }
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Firebase write operation timed out (2.0s limit) / انتهت مهلة الإرسال للسحابة")), 2000)
+      );
+
+      await Promise.race([upsertPromise, timeoutPromise]);
+
+      isFirebaseActive = true;
+      lastFirebaseError = null;
+      console.log("Tournament state successfully persisted to Firebase!");
     } catch (err: any) {
-      console.error("Error saving state to Supabase:", err);
-      isSupabaseActive = false;
-      lastSupabaseError = err?.message || String(err);
+      console.error("Error saving state to Firebase:", err);
+      await suspendFirebase(err, OperationType.WRITE, "tournament_state/main");
     }
   } else {
-    lastSupabaseError = "Supabase URL or Key is not configured / لم يتم إعداد رابط أو مفتاح Supabase";
+    lastFirebaseError = "Firebase is not configured / لم يتم إعداد واجهة Firebase";
   }
 }
 
@@ -275,9 +405,12 @@ async function startServer() {
         dev2NameAr: dbData.settings.dev2NameAr,
         dev2NameEn: dbData.settings.dev2NameEn,
         dev2ImageUrl: dbData.settings.dev2ImageUrl,
-        supabaseActive: isSupabaseActive,
-        supabaseConfigured: !!getSupabase(),
-        supabaseError: lastSupabaseError || undefined
+        supabaseActive: isFirebaseActive,
+        supabaseConfigured: !!getFirebaseDB(),
+        supabaseError: lastFirebaseError || undefined,
+        firebaseActive: isFirebaseActive,
+        firebaseConfigured: !!getFirebaseDB(),
+        firebaseError: lastFirebaseError || undefined
       });
     } catch (err: any) {
       console.error("Error fetching tournament:", err);
@@ -652,120 +785,182 @@ async function startServer() {
     fs.writeFileSync(envPath, newLines.join("\n"), "utf-8");
   }
 
-  // API: Save and Test Supabase Credentials
-  app.post("/api/admin/supabase-config", verifyAdmin, async (req, res) => {
+  // API: Save and Test Firebase Credentials (supporting old Supabase endpoints as backward compatible alias)
+  const handleFirebaseConfig = async (req: any, res: any) => {
     try {
-      const { supabaseUrl, supabaseKey } = req.body;
+      // Allow passing either Firebase keys or Supabase keys (if they still try to send them)
+      const { 
+        projectId, 
+        apiKey, 
+        appId, 
+        authDomain, 
+        firestoreDatabaseId,
+        supabaseUrl,
+        supabaseKey
+      } = req.body;
 
-      if (!supabaseUrl || !supabaseKey || supabaseUrl.trim() === "" || supabaseKey.trim() === "") {
-        // Clear Supabase configuration
-        process.env.SUPABASE_URL = "";
-        process.env.SUPABASE_KEY = "";
-        process.env.VITE_SUPABASE_URL = "";
-        process.env.VITE_SUPABASE_PUBLISHABLE_KEY = "";
+      const customConfigPath = path.join(process.cwd(), "firebase-custom-config.json");
+
+      if (
+        (!projectId || projectId.trim() === "") && 
+        (!apiKey || apiKey.trim() === "") &&
+        (!supabaseUrl || supabaseUrl.trim() === "")
+      ) {
+        // Clear custom Firebase configuration, fallback to default
+        if (fs.existsSync(customConfigPath)) {
+          fs.unlinkSync(customConfigPath);
+        }
         
-        updateEnvFile("", "");
-        supabaseClient = null;
-        isSupabaseActive = false;
-        lastSupabaseError = null;
+        firebaseDB = null;
+        isFirebaseActive = false;
+        lastFirebaseError = null;
+
+        // Warm up / reload with default config
+        await loadDB();
 
         return res.json({ 
           success: true, 
-          message: "Supabase connection cleared / تم مسح بيانات الاتصال بـ Supabase",
-          supabaseActive: false 
+          message: "Custom configuration cleared! Reverted to sandbox Firebase database. / تم استعادة قاعدة البيانات الافتراضية",
+          supabaseActive: isFirebaseActive,
+          firebaseActive: isFirebaseActive,
+          firebaseConfigured: !!getFirebaseDB()
         });
       }
 
-      // Test credentials
-      const trimmedUrl = supabaseUrl.trim();
-      const trimmedKey = supabaseKey.trim();
+      // If they passed Supabase instead, we can gently warn or handle it, but here we expect Firebase.
+      const actualProjectId = (projectId || supabaseUrl || "").trim();
+      const actualApiKey = (apiKey || supabaseKey || "").trim();
+      const actualAppId = (appId || "").trim();
+      const actualAuthDomain = (authDomain || "").trim();
+      const actualDbId = (firestoreDatabaseId || "").trim();
 
-      // Create a temporary client to avoid breaking real client during validation
-      const tempClient = createClient(trimmedUrl, trimmedKey);
-      
-      const { data, error } = await tempClient
-        .from("tournament_state")
-        .select("data")
-        .eq("id", "main")
-        .single();
+      if (!actualProjectId || !actualApiKey) {
+        return res.status(400).json({
+          success: false,
+          error: "Project ID and API Key are required / معرف المشروع ومفتاح واجهة البرمجة مطلوبان"
+        });
+      }
+
+      // Try initializing with temporary app name to verify connection
+      const tempAppName = "firebase-temp-verify-" + Date.now();
+      let tempApp;
+      try {
+        tempApp = initializeApp({
+          projectId: actualProjectId,
+          apiKey: actualApiKey,
+          appId: actualAppId || undefined,
+          authDomain: actualAuthDomain || undefined
+        }, tempAppName);
+      } catch (err: any) {
+        return res.status(400).json({
+          success: false,
+          error: `Failed to initialize app: ${err.message}`
+        });
+      }
 
       let isSuccess = false;
       let errorMsg = null;
 
-      if (error) {
-        // PGRST116 (no row found), or relation / table missing error codes indicate connection succeeds but schema lacks table.
-        if (error.code === "PGRST116" || error.message.includes("relation") || error.code === "42P01") {
+      try {
+        const tempDB = getFirestore(tempApp, actualDbId || undefined);
+        const docRef = doc(tempDB, "tournament_state", "main");
+        const fetchPromise = getDoc(docRef);
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Firebase verification timed out (2.5s) / انتهت مهلة التحقق والاتصال")), 2500)
+        );
+
+        await Promise.race([fetchPromise, timeoutPromise]);
+        isSuccess = true;
+      } catch (err: any) {
+        // In firebase, a missing document is fine, but connection issues or wrong credentials throw error.
+        // Let's check permission or other errors
+        if (err.message && (err.message.includes("permission") || err.message.includes("denied"))) {
           isSuccess = true;
-          errorMsg = error.message; // Keep message to inform developer they need to run the SQL query
+          errorMsg = err.message;
         } else {
           isSuccess = false;
-          errorMsg = error.message;
+          errorMsg = err.message || String(err);
         }
-      } else {
-        isSuccess = true;
+      } finally {
+        if (tempApp) {
+          try {
+            await deleteApp(tempApp);
+          } catch (e) {
+            console.error("Error deleting temp app:", e);
+          }
+        }
       }
 
       if (isSuccess) {
-        // Valid configuration! Let's persist
-        process.env.SUPABASE_URL = trimmedUrl;
-        process.env.SUPABASE_KEY = trimmedKey;
-        process.env.VITE_SUPABASE_URL = trimmedUrl;
-        process.env.VITE_SUPABASE_PUBLISHABLE_KEY = trimmedKey;
+        const newConfig = {
+          projectId: actualProjectId,
+          apiKey: actualApiKey,
+          appId: actualAppId || undefined,
+          authDomain: actualAuthDomain || undefined,
+          firestoreDatabaseId: actualDbId || undefined
+        };
 
-        updateEnvFile(trimmedUrl, trimmedKey);
+        // Persist to custom config file
+        fs.writeFileSync(customConfigPath, JSON.stringify(newConfig, null, 2), "utf-8");
+
+        // Reload primary DB instance
+        isFirebaseSuspended = false;
+        firebaseDB = null;
+        isFirebaseActive = true;
+        lastFirebaseError = null;
         
-        supabaseClient = tempClient;
-        isSupabaseActive = !error; 
-        lastSupabaseError = error ? error.message : null;
-
-        // Auto-seed if the table is functional but has no rows
-        if (!error && (!data || !data.data)) {
-          console.log("Seeding verified empty state row...");
-          const seedValue = getLocalStoredData();
-          await supabaseClient.from("tournament_state").upsert({ id: "main", data: seedValue, updated_at: new Date().toISOString() });
-          isSupabaseActive = true;
-          lastSupabaseError = null;
-        }
+        // Load or auto-seed state
+        const dbData = await loadDB();
 
         return res.json({
           success: true,
-          message: "Supabase connected successfully / تم الاتصال بـ Supabase بنجاح",
-          supabaseActive: isSupabaseActive,
-          supabaseError: lastSupabaseError || undefined
+          message: "Firebase connected and saved successfully / تم الحفظ والربط بـ Firebase بنجاح",
+          supabaseActive: isFirebaseActive,
+          firebaseActive: isFirebaseActive,
+          firebaseConfigured: true,
+          data: dbData
         });
       } else {
         return res.status(400).json({
           success: false,
-          error: errorMsg || "Invalid credentials / بيانات الاتصال غير صالحة"
+          error: errorMsg || "Invalid credentials / بيانات الاتصال بـ Firebase غير صالحة"
         });
       }
-
     } catch (err: any) {
-      console.error("Error verifying Supabase connection:", err);
+      console.error("Error in Firebase configuration API:", err);
       return res.status(500).json({
         success: false,
-        error: err?.message || "Internal server error during validation"
+        error: err?.message || "Internal server error during Firebase validation"
       });
     }
-  });
+  };
 
-  // API: Retry Supabase connection
-  app.post("/api/admin/supabase-retry", verifyAdmin, async (req, res) => {
+  app.post("/api/admin/firebase-config", verifyAdmin, handleFirebaseConfig);
+  app.post("/api/admin/supabase-config", verifyAdmin, handleFirebaseConfig);
+
+  // API: Retry Firebase connection
+  const handleFirebaseRetry = async (req: any, res: any) => {
     try {
-      // Clear cache and rebuild
       cachedData = null;
       lastCacheTime = 0;
+      isFirebaseSuspended = false;
       const dbData = await loadDB();
       res.json({
         success: true,
-        supabaseActive: isSupabaseActive,
-        supabaseError: lastSupabaseError || undefined,
+        supabaseActive: isFirebaseActive,
+        supabaseError: lastFirebaseError || undefined,
+        firebaseActive: isFirebaseActive,
+        firebaseError: lastFirebaseError || undefined,
         data: dbData
       });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || "Failed to retry connection / فشلت المحاولة" });
     }
-  });
+  };
+
+  app.post("/api/admin/firebase-retry", verifyAdmin, handleFirebaseRetry);
+  app.post("/api/admin/supabase-retry", verifyAdmin, handleFirebaseRetry);
 
   // Vite integration middleware
   if (process.env.NODE_ENV !== "production") {

@@ -29,6 +29,27 @@ interface AdminPanelProps {
   supabaseError?: string;
 }
 
+const renderErrorWithLinks = (text: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a 
+          key={i} 
+          href={part} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-indigo-600 hover:text-indigo-800 underline break-all font-sans font-semibold inline-block my-1 px-1.5 py-0.5 bg-indigo-50 rounded-md"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   players,
   lang,
@@ -57,10 +78,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // State managers
   const [copiedSql, setCopiedSql] = useState(false);
   
-  // Supabase Custom Config Editor States
-  const [showSupabaseForm, setShowSupabaseForm] = useState(false);
-  const [inputSupabaseUrl, setInputSupabaseUrl] = useState("");
-  const [inputSupabaseKey, setInputSupabaseKey] = useState("");
+  // Firebase Custom Config Editor States
+  const [showSupabaseForm, setShowSupabaseForm] = useState(false); // keep name for UI toggle simplicity or rename
+  const [inputFirebaseProjectId, setInputFirebaseProjectId] = useState("");
+  const [inputFirebaseApiKey, setInputFirebaseApiKey] = useState("");
+  const [inputFirebaseAppId, setInputFirebaseAppId] = useState("");
+  const [inputFirebaseAuthDomain, setInputFirebaseAuthDomain] = useState("");
+  const [inputFirebaseDbId, setInputFirebaseDbId] = useState("");
+  
   const [isTestingSupabase, setIsTestingSupabase] = useState(false);
   const [supabaseTestErr, setSupabaseTestErr] = useState<string | null>(null);
   const [supabaseTestOk, setSupabaseTestOk] = useState<string | null>(null);
@@ -519,7 +544,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // 7) Save and Test Supabase Config
+  // 7) Save and Test Firebase Config (supporting unified backwards and forwards calls)
   const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsTestingSupabase(true);
@@ -527,31 +552,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setSupabaseTestOk(null);
 
     try {
-      const res = await fetch("/api/admin/supabase-config", {
+      const res = await fetch("/api/admin/firebase-config", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-admin-passcode": adminPasscode,
         },
         body: JSON.stringify({
-          supabaseUrl: inputSupabaseUrl.trim(),
-          supabaseKey: inputSupabaseKey.trim(),
+          projectId: inputFirebaseProjectId.trim(),
+          apiKey: inputFirebaseApiKey.trim(),
+          appId: inputFirebaseAppId.trim(),
+          authDomain: inputFirebaseAuthDomain.trim(),
+          firestoreDatabaseId: inputFirebaseDbId.trim()
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to connect to Supabase");
+        throw new Error(data.error || "Failed to connect to Firebase");
       }
 
-      setSupabaseTestOk(isRtl ? "تم الحفظ والاتصال بنجاح!" : "Saved and connected successfully!");
-      showStatus("success", isRtl ? "تم تحديث إعدادات Supabase بنجاح" : "Supabase connection updated successfully");
+      setSupabaseTestOk(isRtl ? "تم الحفظ والاتصال بنجاح بـ Firebase!" : "Saved and connected successfully to Firebase!");
+      showStatus("success", isRtl ? "تم تحديث إعدادات Firebase بنجاح" : "Firebase connection updated successfully");
       setShowSupabaseForm(false);
       onRefreshTournamentState();
     } catch (err: any) {
-      setSupabaseTestErr(err.message || "Error connecting to Supabase");
-      showStatus("error", err.message || "Error setting up Supabase");
+      setSupabaseTestErr(err.message || "Error connecting to Firebase");
+      showStatus("error", err.message || "Error setting up Firebase");
     } finally {
       setIsTestingSupabase(false);
     }
@@ -563,7 +591,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setSupabaseTestErr(null);
     setSupabaseTestOk(null);
     try {
-      const res = await fetch("/api/admin/supabase-retry", {
+      const res = await fetch("/api/admin/firebase-retry", {
         method: "POST",
         headers: {
           "x-admin-passcode": adminPasscode,
@@ -573,11 +601,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Retry connection failed");
 
-      if (data.supabaseActive) {
+      if (data.firebaseActive) {
         setSupabaseTestOk(isRtl ? "تم الاتصال بنجاح!" : "Successfully connected!");
-        showStatus("success", isRtl ? "متصل بسحابة Supabase" : "Connected to Supabase cloud");
+        showStatus("success", isRtl ? "متصل بسحابة Firebase" : "Connected to Firebase cloud");
       } else {
-        throw new Error(data.supabaseError || (isRtl ? "لم ينجح الاتصال بالسحابة" : "Cloud connection failed"));
+        throw new Error(data.firebaseError || (isRtl ? "لم ينجح الاتصال بـ Firebase" : "Firebase connection failed"));
       }
       onRefreshTournamentState();
     } catch (err: any) {
@@ -869,39 +897,77 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </span>
                   </div>
                   {supabaseError && (
-                    <div className="mt-2 pt-2 border-t border-amber-200/30 font-mono text-[10px] text-rose-600 font-bold max-h-24 overflow-y-auto">
-                      {isRtl ? "آخر خطأ مسجل: " : "Last recorded error: "} {supabaseError}
+                    <div className="mt-2 pt-2 border-t border-amber-200/30 font-mono text-[10px] text-rose-600 font-bold max-h-48 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+                      {isRtl ? "آخر خطأ مسجل: " : "Last recorded error: "}
+                      <div className="mt-1.5 bg-white/70 p-2.5 text-rose-700 rounded-lg border border-rose-200/40 font-mono leading-relaxed normal-case">
+                        {renderErrorWithLinks(supabaseError)}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Dynamic Supabase Settings Form */}
+                {/* Dynamic Firebase Settings Form */}
                 {showSupabaseForm && (
                   <form onSubmit={handleSaveSupabaseConfig} className="bg-slate-50 p-4 rounded-xl border border-slate-200/80 space-y-3.5 animate-fade-in">
-                    <h5 className="text-xs font-bold text-slate-700">{isRtl ? "تعديل بيانات الربط بـ Supabase" : "Set Supabase Credentials"}</h5>
+                    <h5 className="text-xs font-bold text-slate-700">{isRtl ? "تعديل بيانات الربط بـ Firebase" : "Set Firebase Credentials"}</h5>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-3.5">
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Supabase URL</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Firebase Project ID *</label>
                         <input
-                          type="url"
-                          value={inputSupabaseUrl}
-                          onChange={(e) => setInputSupabaseUrl(e.target.value)}
-                          placeholder="https://your-project.supabase.co"
+                          type="text"
+                          value={inputFirebaseProjectId}
+                          onChange={(e) => setInputFirebaseProjectId(e.target.value)}
+                          placeholder="e.g. your-project-id"
                           className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           required
                         />
                       </div>
                       
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Supabase Anon Key or Service Role Key</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Firebase API Key *</label>
                         <input
                           type="password"
-                          value={inputSupabaseKey}
-                          onChange={(e) => setInputSupabaseKey(e.target.value)}
-                          placeholder="eyJhbGciOi..."
+                          value={inputFirebaseApiKey}
+                          onChange={(e) => setInputFirebaseApiKey(e.target.value)}
+                          placeholder="e.g. AIzaSy..."
                           className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">Firestore Database ID (Optional)</label>
+                          <input
+                            type="text"
+                            value={inputFirebaseDbId}
+                            onChange={(e) => setInputFirebaseDbId(e.target.value)}
+                            placeholder="(default)"
+                            className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 mb-1">App ID (Optional)</label>
+                          <input
+                            type="text"
+                            value={inputFirebaseAppId}
+                            onChange={(e) => setInputFirebaseAppId(e.target.value)}
+                            placeholder="1:12345:web:abcd"
+                            className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-1">Auth Domain (Optional)</label>
+                        <input
+                          type="text"
+                          value={inputFirebaseAuthDomain}
+                          onChange={(e) => setInputFirebaseAuthDomain(e.target.value)}
+                          placeholder="your-project-id.firebaseapp.com"
+                          className="w-full bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
                         />
                       </div>
                     </div>
@@ -921,17 +987,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(isRtl ? "هل أنت متأكد من رغبتك في إلغاء تفعيل سحابة Supabase ومسح الإحداثيات؟" : "Are you sure you want to disable Supabase and clear configuration?")) {
-                            setInputSupabaseUrl("");
-                            setInputSupabaseKey("");
+                          if (confirm(isRtl ? "هل أنت متأكد من رغبتك في إلغاء تفعيل سحابة Firebase ومسح الإحداثيات والرجوع لقاعدة البيانات السحابية الافتراضية؟" : "Are you sure you want to disable custom Firebase and roll back to default sandbox?")) {
+                            setInputFirebaseProjectId("");
+                            setInputFirebaseApiKey("");
+                            setInputFirebaseAppId("");
+                            setInputFirebaseAuthDomain("");
+                            setInputFirebaseDbId("");
+                            
                             // Trigger clear config on server
-                            fetch("/api/admin/supabase-config", {
+                            fetch("/api/admin/firebase-config", {
                               method: "POST",
                               headers: {
                                 "Content-Type": "application/json",
                                 "x-admin-passcode": adminPasscode,
                               },
-                              body: JSON.stringify({ supabaseUrl: "", supabaseKey: "" }),
+                              body: JSON.stringify({ projectId: "", apiKey: "" }),
                             }).then(() => {
                               onRefreshTournamentState();
                               setShowSupabaseForm(false);
@@ -959,26 +1029,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
                       {t.supabaseInstructions}
                     </p>
-                    <div className="relative">
-                      <pre className="bg-slate-950 text-slate-300 font-mono text-[10px] p-4 rounded-xl overflow-x-auto whitespace-pre leading-normal border border-slate-800">
-{`CREATE TABLE IF NOT EXISTS tournament_state (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);`}
-                      </pre>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const sqlCode = `CREATE TABLE IF NOT EXISTS tournament_state (\n  id TEXT PRIMARY KEY,\n  data JSONB NOT NULL,\n  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL\n);`;
-                          navigator.clipboard.writeText(sqlCode);
-                          setCopiedSql(true);
-                          setTimeout(() => setCopiedSql(false), 3000);
-                        }}
-                        className="absolute top-2.5 right-2 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-medium rounded-md transition-colors cursor-pointer"
-                      >
-                        {copiedSql ? (isRtl ? "تم النسخ!" : "Copied!") : (isRtl ? "نسخ الاستعلام" : "Copy Query")}
-                      </button>
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200/30 text-xs text-slate-700 leading-relaxed space-y-1.5">
+                      <p className="font-semibold text-emerald-800">💡 {isRtl ? "ملاحظة هامة حول إعداد Firebase:" : "Important note about Firebase setup:"}</p>
+                      <p>{isRtl ? "يقوم السيرفر تلقائياً بحفظ بيانات ومؤشرات التصويت في سحابة Firebase Firestore في مجموعة (collection) باسم `tournament_state` بوثيقة معرّفها `main`." : "The backend automatically syncs and streams MVP vote counters in real-time. Data is persistantly preserved in a database collection named `tournament_state` with document ID `main`."}</p>
                     </div>
                   </div>
                 )}

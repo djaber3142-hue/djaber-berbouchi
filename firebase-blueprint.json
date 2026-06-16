@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "TournamentState": {
+      "title": "TournamentState",
+      "description": "Entire tournament state definition (players, settings, votes)",
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "description": "The nested state payload containing players, settings, and voting tracking"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last database modification"
+        }
+      },
+      "required": ["data"]
+    }
+  },
+  "firestore": {
+    "/tournament_state/{stateId}": {
+      "schema": "TournamentState",
+      "description": "Active state mapping"
+    }
+  }
+}

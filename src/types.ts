@@ -25,6 +25,9 @@ export interface TournamentState {
   supabaseActive?: boolean;
   supabaseConfigured?: boolean;
   supabaseError?: string;
+  firebaseActive?: boolean;
+  firebaseConfigured?: boolean;
+  firebaseError?: string;
 }
 
 export type Language = "ar" | "en";

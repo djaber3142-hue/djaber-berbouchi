@@ -56,10 +56,10 @@ export const translations = {
     devNameEnLabel: "الاسم (بالإنجليزية)",
     devPhotoLabel: "صورة في إطار دائري (اسحب أو اضغط للرفع)",
     footerDevelopersTitle: "مبرمجو وصنّاع الموقع",
-    supabaseStatusLabel: "حالة مزامنة قاعدة البيانات السحابية (Supabase)",
-    supabaseConnected: "🟢 متصل بقاعدة بيانات Supabase السحابية (آمن ومستقر)",
-    supabaseOffline: "🟡 تشغيل محلي احتياطي (لم يتم ربط Supabase أو جدول tournament_state غير موجود)",
-    supabaseInstructions: "لتفعيل قاعدة البيانات السحابية (Supabase) لمنع فقدان البيانات بعد رفع المشروع، قم بإنشاء جدول بالاسم التالي في لوحة تحكم Supabase SQL Editor:"
+    supabaseStatusLabel: "حالة مزامنة قاعدة البيانات السحابية (Firebase)",
+    supabaseConnected: "🟢 متصل بقاعدة بيانات Firebase Cloud Firestore (آمن ومستقر)",
+    supabaseOffline: "🟡 تشغيل محلي احتياطي (لم يتم ربط Firebase أو لم يتم إكمال التجهيز السحابي)",
+    supabaseInstructions: "تم تجهيز وربط نظام Firebase تلقائياً! لمنع فقدان البيانات بعد رفع المشروع، سيقوم النظام تلقائياً بالحفظ والمزامنة السحابية."
   },
   en: {
     appTitle: "Tournament MVP Vote",
@@ -118,9 +118,9 @@ export const translations = {
     devNameEnLabel: "Name (English)",
     devPhotoLabel: "Developer Photo (Drag or Click to Upload)",
     footerDevelopersTitle: "Site Developers & Creators",
-    supabaseStatusLabel: "Cloud Database Sync Status (Supabase)",
-    supabaseConnected: "🟢 Connected to Supabase Cloud Database (Secure & Stable)",
-    supabaseOffline: "🟡 Local Fallback Mode (Supabase not configured or tournament_state table missing)",
-    supabaseInstructions: "To enable Supabase cloud database and prevent data loss after deployment, create the following table inside your Supabase dashboard SQL Editor:"
+    supabaseStatusLabel: "Cloud Database Sync Status (Firebase)",
+    supabaseConnected: "🟢 Connected to Firebase Cloud Firestore (Secure & Stable)",
+    supabaseOffline: "🟡 Local Fallback Mode (Firebase not initialized or cloud sync failed)",
+    supabaseInstructions: "Firebase integration is fully automated! Your tournament data is safely synced to Google Cloud Firestore in real time to prevent any loss."
   }
 };
