@@ -8,6 +8,8 @@ import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
 dotenv.config();
 
+export const app = express();
+
 const PORT = 3000;
 const DB_PATH = path.join(process.cwd(), "data", "tournament.json");
 
@@ -374,7 +376,7 @@ async function saveDB(data: any) {
 }
 
 async function startServer() {
-  const app = express();
+  // Use the globally exported app instance
 
   // Allow larger payloads for Base64 image transfers
   app.use(express.json({ limit: "15mb" }));
@@ -978,12 +980,16 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", async () => {
-    const dbData = await loadDB();
-    const currentPasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1122";
-    console.log(`Tournament Voting Server listening on http://localhost:${PORT}`);
-    console.log(`Admin passcode is currently: ${currentPasscode}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", async () => {
+      const dbData = await loadDB();
+      const currentPasscode = process.env.ADMIN_PASSCODE || dbData.settings.adminPasscode || "1122";
+      console.log(`Tournament Voting Server listening on http://localhost:${PORT}`);
+      console.log(`Admin passcode is currently: ${currentPasscode}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
