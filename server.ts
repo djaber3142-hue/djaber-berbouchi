@@ -387,6 +387,16 @@ async function startServer() {
     next();
   });
 
+  // Request logger helper to diagnose routing issues
+  app.use((req, res, next) => {
+    const logStr = `[ROUTE LOG] ${new Date().toISOString()} - ${req.method} ${req.url} (original: ${req.originalUrl}) - Headers: ${JSON.stringify(req.headers['user-agent'] || 'no-ua')}\n`;
+    try {
+      fs.appendFileSync(path.join(process.cwd(), "data", "route_logs.txt"), logStr);
+    } catch (e) {}
+    console.log(logStr.trim());
+    next();
+  });
+
   // Allow larger payloads for Base64 image transfers
   app.use(express.json({ limit: "15mb" }));
 
