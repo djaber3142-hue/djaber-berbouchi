@@ -275,6 +275,8 @@ async function loadDB(): Promise<any> {
       lastCacheTime = now;
       return seedValue;
     } catch (err: any) {
+      const errStr = `[DB ERROR] ${new Date().toISOString()} - Error connecting with Firebase: ${err?.message || err}\n`;
+      try { fs.appendFileSync(path.join(process.cwd(), "data", "route_logs.txt"), errStr); } catch (e) {}
       console.error("Error connected with Firebase Database fetch: ", err?.message || err);
       await suspendFirebase(err, OperationType.GET, "tournament_state/main");
     }
@@ -387,6 +389,17 @@ async function startServer() {
     next();
   });
 
+  // Enable CORS headers for full compatibility with all development origins
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Request logger helper to diagnose routing issues
   app.use((req, res, next) => {
     const logStr = `[ROUTE LOG] ${new Date().toISOString()} - ${req.method} ${req.url} (original: ${req.originalUrl}) - Headers: ${JSON.stringify(req.headers['user-agent'] || 'no-ua')}\n`;
@@ -434,6 +447,8 @@ async function startServer() {
         firebaseError: lastFirebaseError || undefined
       });
     } catch (err: any) {
+      const errStr = `[API ERROR] ${new Date().toISOString()} - Error fetching tournament: ${err?.message || err}\n`;
+      try { fs.appendFileSync(path.join(process.cwd(), "data", "route_logs.txt"), errStr); } catch (e) {}
       console.error("Error fetching tournament:", err);
       res.status(500).json({ error: "Failed to load tournament data / فشل في تحميل البيانات" });
     }
