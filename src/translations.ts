@@ -59,7 +59,9 @@ export const translations = {
     supabaseStatusLabel: "حالة مزامنة قاعدة البيانات السحابية (Firebase)",
     supabaseConnected: "🟢 متصل بقاعدة بيانات Firebase Cloud Firestore (آمن ومستقر)",
     supabaseOffline: "🟡 تشغيل محلي احتياطي (لم يتم ربط Firebase أو لم يتم إكمال التجهيز السحابي)",
-    supabaseInstructions: "تم تجهيز وربط نظام Firebase تلقائياً! لمنع فقدان البيانات بعد رفع المشروع، سيقوم النظام تلقائياً بالحفظ والمزامنة السحابية."
+    supabaseInstructions: "تم تجهيز وربط نظام Firebase تلقائياً! لمنع فقدان البيانات بعد رفع المشروع، سيقوم النظام تلقائياً بالحفظ والمزامنة السحابية.",
+    darkMode: "الوضع الداكن",
+    lightMode: "الوضع المضيء"
   },
   en: {
     appTitle: "Tournament MVP Vote",
@@ -121,6 +123,8 @@ export const translations = {
     supabaseStatusLabel: "Cloud Database Sync Status (Firebase)",
     supabaseConnected: "🟢 Connected to Firebase Cloud Firestore (Secure & Stable)",
     supabaseOffline: "🟡 Local Fallback Mode (Firebase not initialized or cloud sync failed)",
-    supabaseInstructions: "Firebase integration is fully automated! Your tournament data is safely synced to Google Cloud Firestore in real time to prevent any loss."
+    supabaseInstructions: "Firebase integration is fully automated! Your tournament data is safely synced to Google Cloud Firestore in real time to prevent any loss.",
+    darkMode: "Dark Mode",
+    lightMode: "Light Mode"
   }
 };

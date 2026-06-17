@@ -5,7 +5,8 @@ import { PlayerCard } from "./components/PlayerCard";
 import { AdminPanel } from "./components/AdminPanel";
 import { 
   Trophy, Globe, Shield, RefreshCw, Star, 
-  HelpCircle, AlertCircle, Sparkles, CheckCircle2 
+  HelpCircle, AlertCircle, Sparkles, CheckCircle2,
+  Sun, Moon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -27,6 +28,27 @@ export default function App() {
     const saved = localStorage.getItem("voting_lang");
     return (saved === "ar" || saved === "en") ? saved : "ar";
   });
+
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("darkMode");
+      if (saved !== null) {
+        return saved === "true";
+      }
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("darkMode", "true");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("darkMode", "false");
+    }
+  }, [isDarkMode]);
   
   const [tournamentState, setTournamentState] = useState<TournamentState>({
     players: [],
@@ -198,10 +220,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col selection:bg-emerald-500 selection:text-white pb-16">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 dark:text-slate-100 flex flex-col selection:bg-emerald-500 selection:text-white pb-16 transition-colors duration-300">
       
       {/* Top bilingual Header Bar */}
-      <header className="bg-white border-b border-slate-100 shadow-sm sticky top-0 z-40">
+      <header className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 shadow-sm sticky top-0 z-40 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           
           {/* Logo / Title Area */}
@@ -218,7 +240,7 @@ export default function App() {
               )}
             </div>
             <div>
-              <span className="font-extrabold text-slate-800 text-md tracking-tight block">
+              <span className="font-extrabold text-slate-800 dark:text-slate-100 text-md tracking-tight block">
                 {tournamentState.tournamentNameAr && tournamentState.tournamentNameEn ? (
                   isRtl ? tournamentState.tournamentNameAr : tournamentState.tournamentNameEn
                 ) : (
@@ -231,13 +253,33 @@ export default function App() {
             </div>
           </div>
 
-          {/* Languages Toggle & Admin Buttons */}
+          {/* Languages, Theme & Admin Buttons */}
           <div className="flex items-center gap-3">
+            
+            {/* Dark Mode Toggle button */}
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-200/40 dark:border-slate-700"
+              title={isDarkMode ? t.lightMode : t.darkMode}
+              aria-label="Toggle Dark Mode"
+            >
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden sm:inline">{t.lightMode}</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-500" />
+                  <span className="hidden sm:inline">{t.darkMode}</span>
+                </>
+              )}
+            </button>
             
             {/* Language Switch button */}
             <button
               onClick={handleLanguageToggle}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-200/40"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all active:scale-95 cursor-pointer border border-slate-200/40 dark:border-slate-700"
             >
               <Globe className="w-3.5 h-3.5 text-slate-400" />
               <span>{t.langSwitch}</span>
@@ -248,14 +290,14 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setIsAdminAuthenticated(true)}
-                  className="px-3.5 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs transition-all cursor-pointer flex items-center gap-1"
+                  className="px-3.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400 font-bold text-xs transition-all cursor-pointer flex items-center gap-1"
                 >
-                  <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                  <Shield className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-550" />
                   <span>{t.adminBtn}</span>
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-2.5 py-2 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs hover:bg-rose-100 transition-colors cursor-pointer"
+                  className="px-2.5 py-2 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 font-bold text-xs hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-colors cursor-pointer"
                 >
                   {t.logoutBtn}
                 </button>
@@ -270,7 +312,7 @@ export default function App() {
                     triggerNotification("success", isRtl ? "تم الدخول بصفتك مشرف بفضل ميزة الدخول المباشر" : "Logged in as Admin directly!");
                   }
                 }}
-                className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer border border-transparent dark:border-slate-700"
                 title={t.adminBtn}
               >
                 <Shield className="w-4 h-4" />
@@ -371,13 +413,13 @@ export default function App() {
 
         {/* Dynamic Voter Help Tip bar */}
         {!hasVoted && !tournamentState.isVotingPaused && (
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 flex items-start gap-3 mb-10 w-full max-w-4xl mx-auto">
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 rounded-2xl p-4 flex items-start gap-3 mb-10 w-full max-w-4xl mx-auto transition-colors">
             <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-bold text-amber-800">
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
                 {t.oneVoteWarning}
               </p>
-              <p className="text-[10px] text-amber-600/85 mt-0.5">
+              <p className="text-[10px] text-amber-600/85 dark:text-amber-450 mt-0.5">
                 {isRtl 
                   ? "سيقوم المتصفح بتسجيل توقيع جهازك لضمان نزاهة النتائج وتصفية المكررين لبطولتنا المحلية." 
                   : "We use a browser persistent fingerprinting token on our system to prevent multi-voting."}
@@ -388,9 +430,9 @@ export default function App() {
 
         {/* Players Roster Nominees Grid */}
         {tournamentState.players.length === 0 ? (
-          <div className="text-center py-20 bg-white rounded-3xl shadow-sm border border-slate-100 max-w-md mx-auto">
-            <Trophy className="w-12 h-12 text-slate-300 mx-auto stroke-1 mb-4" />
-            <h3 className="text-lg font-bold text-slate-800">{t.noPlayers}</h3>
+          <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 max-w-md mx-auto transition-colors">
+            <Trophy className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto stroke-1 mb-4" />
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{t.noPlayers}</h3>
             {isAdminAuthenticated && (
               <button
                 onClick={() => setIsAdminAuthenticated(true)}
@@ -420,10 +462,10 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="mt-20 border-t border-slate-200/50 pt-8 text-center text-slate-400 text-xs w-full">
+      <footer className="mt-20 border-t border-slate-200/50 dark:border-slate-800 pt-8 text-center text-slate-400 dark:text-slate-550 text-xs w-full transition-colors duration-300">
         {/* Developers / Owners section */}
         <div className="mb-8 flex flex-col items-center justify-center gap-4">
-          <div className="text-[11px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5 justify-center">
+          <div className="text-[11px] font-bold tracking-wider text-slate-400 dark:text-slate-500 uppercase flex items-center gap-1.5 justify-center">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span>{t.footerDevelopersTitle}</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -432,8 +474,8 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-8 mt-1">
             {/* Dev 1 Card */}
             {(tournamentState.dev1NameAr || tournamentState.dev1NameEn) && (
-              <div className="flex items-center gap-3 bg-white hover:bg-slate-50 px-4 py-2 rounded-full border border-slate-100 transition-all duration-300 shadow-sm">
-                <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-slate-100 flex items-center justify-center">
+              <div className="flex items-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 px-4 py-2 rounded-full border border-slate-100 dark:border-slate-850 transition-all duration-300 shadow-sm text-slate-755 dark:text-slate-300">
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
                   {tournamentState.dev1ImageUrl ? (
                     <img
                       src={tournamentState.dev1ImageUrl}
@@ -445,7 +487,7 @@ export default function App() {
                   )}
                 </div>
                 <div className={`${isRtl ? "text-right" : "text-left"} flex flex-col`}>
-                  <span className="font-bold text-slate-700 text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
                     {isRtl ? tournamentState.dev1NameAr : tournamentState.dev1NameEn}
                   </span>
                 </div>
@@ -454,8 +496,8 @@ export default function App() {
 
             {/* Dev 2 Card */}
             {(tournamentState.dev2NameAr || tournamentState.dev2NameEn) && (
-              <div className="flex items-center gap-3 bg-white hover:bg-slate-50 px-4 py-2 rounded-full border border-slate-100 transition-all duration-300 shadow-sm">
-                <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-slate-100 flex items-center justify-center">
+              <div className="flex items-center gap-3 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 px-4 py-2 rounded-full border border-slate-100 dark:border-slate-850 transition-all duration-300 shadow-sm text-slate-755 dark:text-slate-300">
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-emerald-500/30 flex-shrink-0 bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
                   {tournamentState.dev2ImageUrl ? (
                     <img
                       src={tournamentState.dev2ImageUrl}
@@ -467,7 +509,7 @@ export default function App() {
                   )}
                 </div>
                 <div className={`${isRtl ? "text-right" : "text-left"} flex flex-col`}>
-                  <span className="font-bold text-slate-700 text-xs">
+                  <span className="font-bold text-slate-700 dark:text-slate-300 text-xs">
                     {isRtl ? tournamentState.dev2NameAr : tournamentState.dev2NameEn}
                   </span>
                 </div>
@@ -489,19 +531,19 @@ export default function App() {
       {/* Admin Login Modal (Triggered by passcode button) */}
       <AnimatePresence>
         {showAdminLogin && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
             <motion.div
               layout
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6"
+              className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 border dark:border-slate-800 transition-colors duration-300"
               dir={isRtl ? "rtl" : "ltr"}
             >
-              <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+              <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2">
                   <Shield className="w-5 h-5 text-emerald-600" />
-                  <h3 className="font-extrabold text-slate-800 text-lg">{t.adminTitle}</h3>
+                  <h3 className="font-extrabold text-slate-800 dark:text-slate-100 text-lg">{t.adminTitle}</h3>
                 </div>
                 <button 
                   onClick={() => {
@@ -509,14 +551,14 @@ export default function App() {
                     setAdminPasscode("");
                     setLoginError("");
                   }}
-                  className="p-1 px-2.5 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                  className="p-1 px-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white rounded-lg cursor-pointer"
                 >
                   {t.cancel}
                 </button>
               </div>
 
               <form onSubmit={handleAdminAuthSubmit} className="mt-5 space-y-4">
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                   {t.enterPasscode}
                 </p>
 
@@ -527,12 +569,12 @@ export default function App() {
                     value={adminPasscode}
                     onChange={(e) => setAdminPasscode(e.target.value)}
                     placeholder={t.passcodePlaceholder}
-                    className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-center text-lg font-bold tracking-widest"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 text-center text-lg font-bold tracking-widest text-slate-800 dark:text-white"
                   />
                 </div>
 
                 {loginError && (
-                  <div className="p-3 bg-rose-50 border border-rose-100 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 text-rose-800 dark:text-rose-400 rounded-xl text-xs font-semibold flex items-center gap-1.5">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{loginError}</span>
                   </div>
@@ -540,7 +582,7 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md active:scale-98 cursor-pointer text-sm"
+                  className="w-full bg-slate-900 dark:bg-slate-850 hover:bg-slate-800 dark:hover:bg-slate-750 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-md active:scale-98 cursor-pointer text-sm border dark:border-slate-800"
                 >
                   {t.loginBtn}
                 </button>

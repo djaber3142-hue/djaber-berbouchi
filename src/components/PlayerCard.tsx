@@ -92,8 +92,8 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -6 }}
-      className={`relative bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group ${
-        isTargetOfVote ? "ring-4 ring-emerald-500/80 border-transparent shadow-emerald-100" : ""
+      className={`relative bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group ${
+        isTargetOfVote ? "ring-4 ring-emerald-500/80 border-transparent shadow-emerald-100 dark:shadow-none" : ""
       }`}
     >
       {/* Percentage Spotlight (Leader effect) */}
@@ -105,7 +105,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
       )}
 
       {/* Image / Avatar Display */}
-      <div className="relative w-full h-56 bg-slate-100 overflow-hidden border-b border-slate-50">
+      <div className="relative w-full h-56 bg-slate-100 dark:bg-slate-950 overflow-hidden border-b border-slate-50 dark:border-slate-800">
         {player.imageUrl ? (
           <>
             <img
@@ -124,37 +124,37 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
 
       {/* Information Container */}
       <div className="p-6">
-        <h3 className="text-xl font-bold text-slate-800 tracking-tight leading-snug truncate">
+        <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight leading-snug truncate">
           {name}
         </h3>
-        <p className="text-slate-400 text-xs mt-1 font-semibold flex items-center gap-1.5">
+        <p className="text-slate-400 dark:text-slate-450 text-xs mt-1 font-semibold flex items-center gap-1.5">
           <User className="w-3.5 h-3.5" />
           <span>{isRtl ? "إحصائيات اللاعب الكروي" : "League MVP Nominee"}</span>
         </p>
 
         {/* Voting Progress Stats (Reveal once voted, or if paused and stats are shown) */}
-        <div className="mt-6 space-y-3 bg-slate-50/70 p-4 rounded-2xl border border-slate-100/50">
+        <div className="mt-6 space-y-3 bg-slate-50/70 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100/50 dark:border-slate-800/40">
           <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-500 font-medium">{isRtl ? "الأصوات" : "Votes"}</span>
-            <span className="font-mono font-bold text-slate-800">
+            <span className="text-slate-500 dark:text-slate-400 font-medium">{isRtl ? "الأصوات" : "Votes"}</span>
+            <span className="font-mono font-bold text-slate-800 dark:text-slate-100">
               {player.votes}
             </span>
           </div>
 
           <div className="relative pt-1">
             <div className="flex mb-2 items-center justify-between">
-              <span className="text-xs text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md">
                 {isRtl ? "الحصّة" : "Share"}
               </span>
               <div className="text-right">
-                <span className="text-sm font-bold text-slate-800 font-mono flex items-center gap-0.5">
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono flex items-center gap-0.5">
                   {player.percentage}%
-                  <Percent className="w-3.5 h-3.5 text-slate-400" />
+                  <Percent className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
                 </span>
               </div>
             </div>
             
-            <div className="overflow-hidden h-3 text-xs flex rounded-full bg-slate-200">
+            <div className="overflow-hidden h-3 text-xs flex rounded-full bg-slate-200 dark:bg-slate-700">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${player.percentage || 0}%` }}
@@ -172,7 +172,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
         {/* Action Button */}
         <div className="mt-6">
           {isTargetOfVote ? (
-            <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-inner">
+            <div className="w-full bg-emerald-50 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-900/60 text-emerald-800 dark:text-emerald-400 font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-inner">
               <Check className="w-5 h-5 text-emerald-600 animate-bounce" />
               <span>{t.votedLabel}</span>
             </div>
@@ -182,8 +182,8 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({
               disabled={hasVoted || isVotingPaused}
               className={`w-full font-bold py-3.5 px-4 rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 transform active:scale-98 flex items-center justify-center gap-2 cursor-pointer ${
                 hasVoted || isVotingPaused
-                  ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed hover:shadow-none"
-                  : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-950 text-white hover:from-emerald-700 hover:to-emerald-600"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700 cursor-not-allowed hover:shadow-none"
+                  : "bg-gradient-to-r from-slate-900 via-slate-800 to-slate-950 dark:from-slate-800 dark:via-slate-750 dark:to-slate-900 text-white hover:from-emerald-700 hover:to-emerald-600 dark:hover:from-emerald-600 dark:hover:to-emerald-55 border dark:border-slate-700"
               }`}
             >
               {!hasVoted && !isVotingPaused && <Check className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />}

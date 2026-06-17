@@ -7,6 +7,8 @@
   --font-mono: "JetBrains Mono", monospace;
 }
 
+@variant dark (.dark &);
+
 /* Custom animation extensions */
 @keyframes pulse-subtle {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -22,6 +24,12 @@ body {
   background-color: #f8fafc;
   color: #0f172a;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.dark body {
+  background-color: #090d16;
+  color: #f1f5f9;
 }
 
 /* Perfect direction alignment support */
